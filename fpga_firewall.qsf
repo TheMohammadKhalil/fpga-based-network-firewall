@@ -1,0 +1,234 @@
+# FPGA Firewall Quartus Settings File
+# Intel/Altera Quartus Prime Project
+
+# Top-level entity
+set_global_assignment -name TOP_LEVEL_ENTITY firewall_rgmii_top
+
+# Device selection (Cyclone V - update as needed for your board)
+set_global_assignment -name DEVICE 5CEBA4F23C7
+
+# Device family
+set_global_assignment -name FAMILY "Cyclone V"
+
+# Target Quartus version
+set_global_assignment -name MIN_QUARTUS_VERSION "18.1.0"
+
+# Project name
+set_global_assignment -name PROJECT_NAME "fpga_firewall"
+
+# =============================================================================
+# Compilation Settings
+# =============================================================================
+
+# Optimization technique
+set_global_assignment -name OPTIMIZATION_TECHNIQUE "BALANCED"
+
+# Fitter effort
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+
+# Timing closure effort
+set_global_assignment -name TIMING_CLOSURE_EFFORT "STANDARD"
+
+# Auto enable pipelining
+set_global_assignment -name ENABLE_PIPELINING "ALL"
+
+# =============================================================================
+# Verilog Source Files
+# =============================================================================
+
+# Top-level firewall wrapper
+set_global_assignment -name VERILOG_FILE rtl/firewall_rgmii_top.v
+
+# Firewall core modules
+set_global_assignment -name VERILOG_FILE rtl/fpga_firewall_top.v
+set_global_assignment -name VERILOG_FILE rtl/firewall_regs.v
+set_global_assignment -name VERILOG_FILE rtl/firewall_rx_parser.v
+set_global_assignment -name VERILOG_FILE rtl/firewall_tx_rebuild.v
+set_global_assignment -name VERILOG_FILE rtl/firewall_decision.v
+set_global_assignment -name VERILOG_FILE rtl/firewall_rule_match.v
+set_global_assignment -name VERILOG_FILE rtl/eth_header_insert.v
+set_global_assignment -name VERILOG_FILE rtl/eth_header_extract.v
+set_global_assignment -name VERILOG_FILE rtl/header_context_store.v
+
+# Ethernet MAC modules (verilog-ethernet)
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/eth_mac_1g__rgmii.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/eth_mac_1g.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/rgmii_phy_if.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/axis_gmii_rx.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/axis_gmii_tx.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/oddr.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/ssio_ddr_in.v
+set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/lfsr.v
+
+# AXI Stream library (lib/axis)
+set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_fifo.v
+set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_register.v
+
+# =============================================================================
+# Pin Assignments (Update for your specific board)
+# =============================================================================
+
+# 125 MHz clock input
+set_location_assignment PIN_C7 -to clk_125mhz
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to clk_125mhz
+
+# System reset (active low)
+set_location_assignment PIN_D8 -to rst_n
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rst_n
+
+# RGMII interface to Ethernet PHY
+# RX signals (from PHY)
+set_location_assignment PIN_E9 -to rgmii_rx_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rx_clk
+set_location_assignment PIN_F9 -to rgmii_rxd[0]
+set_location_assignment PIN_G9 -to rgmii_rxd[1]
+set_location_assignment PIN_H9 -to rgmii_rxd[2]
+set_location_assignment PIN_J9 -to rgmii_rxd[3]
+set_location_assignment PIN_K9 -to rgmii_rx_ctl
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rxd[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rxd[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rxd[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rxd[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_rx_ctl
+
+# TX signals (to PHY)
+set_location_assignment PIN_L9 -to rgmii_tx_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_tx_clk
+set_location_assignment PIN_M9 -to rgmii_txd[0]
+set_location_assignment PIN_N9 -to rgmii_txd[1]
+set_location_assignment PIN_P9 -to rgmii_txd[2]
+set_location_assignment PIN_R9 -to rgmii_txd[3]
+set_location_assignment PIN_T9 -to rgmii_tx_ctl
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_txd[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_txd[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_txd[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_txd[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rgmii_tx_ctl
+
+# Configuration interface (example pins - adjust as needed)
+set_location_assignment PIN_U9 -to cfg_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_clk
+set_location_assignment PIN_V9 -to cfg_rst_n
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_rst_n
+set_location_assignment PIN_W9 -to cfg_we
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_we
+set_location_assignment PIN_Y9 -to cfg_addr[0]
+set_location_assignment PIN_AA9 -to cfg_addr[1]
+set_location_assignment PIN_AB9 -to cfg_addr[2]
+set_location_assignment PIN_AC9 -to cfg_addr[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_addr[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_addr[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_addr[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_addr[3]
+
+# WDATA pins
+set_location_assignment PIN_AD9 -to cfg_wdata[0]
+set_location_assignment PIN_AE9 -to cfg_wdata[1]
+set_location_assignment PIN_AF9 -to cfg_wdata[2]
+set_location_assignment PIN_AG9 -to cfg_wdata[3]
+set_location_assignment PIN_AH9 -to cfg_wdata[4]
+set_location_assignment PIN_AJ9 -to cfg_wdata[5]
+set_location_assignment PIN_AK9 -to cfg_wdata[6]
+set_location_assignment PIN_AL9 -to cfg_wdata[7]
+set_location_assignment PIN_AM9 -to cfg_wdata[8]
+set_location_assignment PIN_AN9 -to cfg_wdata[9]
+set_location_assignment PIN_AP9 -to cfg_wdata[10]
+set_location_assignment PIN_AR9 -to cfg_wdata[11]
+set_location_assignment PIN_AT9 -to cfg_wdata[12]
+set_location_assignment PIN_AU9 -to cfg_wdata[13]
+set_location_assignment PIN_AV9 -to cfg_wdata[14]
+set_location_assignment PIN_AW9 -to cfg_wdata[15]
+set_location_assignment PIN_B10 -to cfg_wdata[16]
+set_location_assignment PIN_C10 -to cfg_wdata[17]
+set_location_assignment PIN_D10 -to cfg_wdata[18]
+set_location_assignment PIN_E10 -to cfg_wdata[19]
+set_location_assignment PIN_F10 -to cfg_wdata[20]
+set_location_assignment PIN_G10 -to cfg_wdata[21]
+set_location_assignment PIN_H10 -to cfg_wdata[22]
+set_location_assignment PIN_J10 -to cfg_wdata[23]
+set_location_assignment PIN_K10 -to cfg_wdata[24]
+set_location_assignment PIN_L10 -to cfg_wdata[25]
+set_location_assignment PIN_M10 -to cfg_wdata[26]
+set_location_assignment PIN_N10 -to cfg_wdata[27]
+set_location_assignment PIN_P10 -to cfg_wdata[28]
+set_location_assignment PIN_R10 -to cfg_wdata[29]
+set_location_assignment PIN_T10 -to cfg_wdata[30]
+set_location_assignment PIN_U10 -to cfg_wdata[31]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[4]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[5]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[6]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[7]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[8]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[9]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[10]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[11]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[12]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[13]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[14]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[15]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[16]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[17]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[18]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[19]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[20]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[21]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[22]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[23]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[24]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[25]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[26]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[27]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[28]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[29]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[30]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cfg_wdata[31]
+
+# =============================================================================
+# Timing Constraints
+# =============================================================================
+
+# Create clock for 125 MHz system clock
+create_clock -period 8.000 -name "clk_125mhz" [get_ports {clk_125mhz}]
+
+# Create clock for RGMII receive (derived from PHY)
+create_clock -period 8.000 -name "rgmii_rx_clk" [get_ports {rgmii_rx_clk}]
+
+# Set input delay for RGMII RX signals (relative to rx_clk)
+set_input_delay -clock rgmii_rx_clk -max 1.0 [get_ports {rgmii_rxd[*] rgmii_rx_ctl}]
+set_input_delay -clock rgmii_rx_clk -min 0.5 [get_ports {rgmii_rxd[*] rgmii_rx_ctl}]
+
+# Set output delay for RGMII TX signals
+set_output_delay -clock rgmii_tx_clk -max 2.0 [get_ports {rgmii_txd[*] rgmii_tx_ctl}]
+set_output_delay -clock rgmii_tx_clk -min 0.5 [get_ports {rgmii_txd[*] rgmii_tx_ctl}]
+
+# False path between asynchronous clock domains
+set_false_path -from [get_keepers {*rx_clk*}] -to [get_keepers {*tx_clk*}]
+set_false_path -from [get_keepers {*tx_clk*}] -to [get_keepers {*rx_clk*}]
+
+# =============================================================================
+# Project Parameters
+# =============================================================================
+
+# Firewall parameters (can be overridden)
+set_global_assignment -name VERILOG_PARAMETER MAX_FRAME_BYTES 2048
+set_global_assignment -name VERILOG_PARAMETER TARGET "ALTERA"
+
+# =============================================================================
+# Additional Settings
+# =============================================================================
+
+# Enable SignalTap debugging (optional - uncomment to enable)
+# set_global_assignment -name ENABLE_SIGNALTAP_LOGIC_ANALYZER ON
+
+# Power optimization
+set_global_assignment -name POWER_OPTIMIZATION "STANDARD"
+
+# Enable register retiming for better timing
+set_global_assignment -name OPTIMIZE_REGISTER_DUPLICATION ON
+set_global_assignment -name REGISTER_RETIMING ON
+
+# End of Quartus Settings File
