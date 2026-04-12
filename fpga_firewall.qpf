@@ -1,29 +1,4 @@
-# Quartus II Project File
-# FPGA Firewall Project
+# Quartus Project File — FPGA Firewall
+# Target board : Terasic DE2-115 (Cyclone IV E EP4CE115F29C7)
 
-# Quartus project settings
 PROJECT_REVISION = "fpga_firewall"
-PROJECT_TYPE = "Project"
-FAMILY = "Cyclone V"
-DEVICE = "5CEBA4F23C7"
-
-# Top-level entity
-TOP_LEVEL_ENTITY = "firewall_rgmii_top"
-
-# Project name
-PROJECT_NAME = "fpga_firewall"
-
-# Last compiled revision
-LAST_COMPILE_REVISION = "fpga_firewall"
-
-# Default Quartus version
-DEFAULT_QUARTUS_VERSION = "18.1.0"
-
-# Root directory
-PROJECT_ROOT_DIRECTORY = ""
-
-# Revision settings
-REVISION_ROOT_DIRECTORY = "output_files"
-
-# Include settings file
-include fpga_firewall.qsf
