@@ -45,6 +45,8 @@ module eth_mac_1g_rgmii #
     parameter CLOCK_INPUT_STYLE = "BUFG",
     // Use 90 degree clock for RGMII transmit ("TRUE", "FALSE")
     parameter USE_CLK90 = "TRUE",
+    // Force fixed 1000BASE-T RGMII mode
+    parameter FORCE_GIGABIT = 0,
     parameter ENABLE_PADDING = 1,
     parameter MIN_FRAME_LENGTH = 64
 )
@@ -148,9 +150,12 @@ always @(posedge gtx_clk) begin
         rx_speed_count_2 <= 0;
         speed_reg <= 2'b10;
         mii_select_reg <= 1'b0;
+    end else if (FORCE_GIGABIT) begin
+        speed_reg <= 2'b10;
+        mii_select_reg <= 1'b0;
     end else begin
         rx_speed_count_1 <= rx_speed_count_1 + 1;
-        
+
         if (rx_prescale_sync[1] ^ rx_prescale_sync[2]) begin
             rx_speed_count_2 <= rx_speed_count_2 + 1;
         end

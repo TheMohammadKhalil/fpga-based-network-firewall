@@ -14,18 +14,12 @@ set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 # Project
 # =============================================================================
 set_global_assignment -name TOP_LEVEL_ENTITY fpga
-set_global_assignment -name PROJECT_NAME "fpga_firewall"
-set_global_assignment -name MIN_QUARTUS_VERSION "18.1.0"
 
 # =============================================================================
 # Compilation
 # =============================================================================
 set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
-set_global_assignment -name TIMING_CLOSURE_EFFORT STANDARD
-set_global_assignment -name OPTIMIZE_REGISTER_DUPLICATION ON
-set_global_assignment -name REGISTER_RETIMING ON
-set_global_assignment -name POWER_OPTIMIZATION STANDARD
 
 # =============================================================================
 # SDC timing constraints
@@ -43,6 +37,8 @@ set_global_assignment -name VERILOG_FILE rtl/fpga_core.v
 # Utility modules (sync reset, debounce)
 set_global_assignment -name VERILOG_FILE rtl/sync_reset.v
 set_global_assignment -name VERILOG_FILE rtl/debounce_switch.v
+set_global_assignment -name VERILOG_FILE rtl/axis_async_fifo.v
+set_global_assignment -name VERILOG_FILE rtl/de2_rgmii_rx.v
 
 # Firewall pipeline
 set_global_assignment -name VERILOG_FILE rtl/fpga_firewall_top.v
@@ -60,14 +56,14 @@ set_global_assignment -name VERILOG_FILE rtl/eth_header_extract.v
 set_global_assignment -name VERILOG_FILE rtl/header_context_store.v
 
 # Ethernet MAC (verilog-ethernet)
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/eth_mac_1g__rgmii.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/eth_mac_1g.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/rgmii_phy_if.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/axis_gmii_rx.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/axis_gmii_tx.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/oddr.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/ssio_ddr_in.v
-set_global_assignment -name VERILOG_FILE verilog-ethernet/rtl/lfsr.v
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/eth_mac_1g__rgmii.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/eth_mac_1g.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/rgmii_phy_if.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/axis_gmii_rx.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/axis_gmii_tx.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/oddr.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/ssio_ddr_in.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/lfsr.v"
 
 # AXI-Stream library
 set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_fifo.v
@@ -81,7 +77,7 @@ set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_register.v
 #============================================================
 # Clock
 #============================================================
-set_location_assignment PIN_Y2  -to CLOCK_50
+set_location_assignment PIN_Y2 -to CLOCK_50
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to CLOCK_50
 
 #============================================================
@@ -115,8 +111,8 @@ set_location_assignment PIN_AB23 -to SW[12]
 set_location_assignment PIN_AA24 -to SW[13]
 set_location_assignment PIN_AA23 -to SW[14]
 set_location_assignment PIN_AA22 -to SW[15]
-set_location_assignment PIN_Y24  -to SW[16]
-set_location_assignment PIN_Y23  -to SW[17]
+set_location_assignment PIN_Y24 -to SW[16]
+set_location_assignment PIN_Y23 -to SW[17]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[0]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[1]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[2]
@@ -219,19 +215,19 @@ set_location_assignment PIN_U24 -to HEX1[6]
 
 set_location_assignment PIN_AA25 -to HEX2[0]
 set_location_assignment PIN_AA26 -to HEX2[1]
-set_location_assignment PIN_Y25  -to HEX2[2]
-set_location_assignment PIN_W26  -to HEX2[3]
-set_location_assignment PIN_Y26  -to HEX2[4]
-set_location_assignment PIN_W27  -to HEX2[5]
-set_location_assignment PIN_W28  -to HEX2[6]
+set_location_assignment PIN_Y25 -to HEX2[2]
+set_location_assignment PIN_W26 -to HEX2[3]
+set_location_assignment PIN_Y26 -to HEX2[4]
+set_location_assignment PIN_W27 -to HEX2[5]
+set_location_assignment PIN_W28 -to HEX2[6]
 
-set_location_assignment PIN_V21  -to HEX3[0]
-set_location_assignment PIN_U21  -to HEX3[1]
+set_location_assignment PIN_V21 -to HEX3[0]
+set_location_assignment PIN_U21 -to HEX3[1]
 set_location_assignment PIN_AB20 -to HEX3[2]
 set_location_assignment PIN_AA21 -to HEX3[3]
 set_location_assignment PIN_AD24 -to HEX3[4]
 set_location_assignment PIN_AF23 -to HEX3[5]
-set_location_assignment PIN_Y19  -to HEX3[6]
+set_location_assignment PIN_Y19 -to HEX3[6]
 
 set_location_assignment PIN_AB19 -to HEX4[0]
 set_location_assignment PIN_AA19 -to HEX4[1]
@@ -324,28 +320,27 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[6]
 
 #============================================================
 # Ethernet ENET0  (ingress / WAN side)
+# DE2-115 official Ethernet pins from the Terasic user manual.
+# The board ships with the PHYs in RGMII mode by default; in that mode
+# ENET*_RX_DV is used as RX_CTL and ENET*_TX_EN is used as TX_CTL.
 #============================================================
-set_location_assignment PIN_D6  -to ENET0_GTX_CLK
-set_location_assignment PIN_D5  -to ENET0_INT_N
-set_location_assignment PIN_C6  -to ENET0_MDC
-set_location_assignment PIN_A6  -to ENET0_MDIO
-set_location_assignment PIN_B6  -to ENET0_RST_N
-set_location_assignment PIN_A9  -to ENET0_RX_CLK
-set_location_assignment PIN_B9  -to ENET0_RX_DATA[0]
-set_location_assignment PIN_A10 -to ENET0_RX_DATA[1]
-set_location_assignment PIN_B10 -to ENET0_RX_DATA[2]
-set_location_assignment PIN_A11 -to ENET0_RX_DATA[3]
-set_location_assignment PIN_C11 -to ENET0_RX_DV
-set_location_assignment PIN_B11 -to ENET0_TX_DATA[0]
-set_location_assignment PIN_C10 -to ENET0_TX_DATA[1]
-set_location_assignment PIN_A12 -to ENET0_TX_DATA[2]
-set_location_assignment PIN_D11 -to ENET0_TX_DATA[3]
-set_location_assignment PIN_C9  -to ENET0_TX_EN
+set_location_assignment PIN_A17 -to ENET0_GTX_CLK
+set_location_assignment PIN_A21 -to ENET0_INT_N
+set_location_assignment PIN_C19 -to ENET0_RST_N
+set_location_assignment PIN_A15 -to ENET0_RX_CLK
+set_location_assignment PIN_C16 -to ENET0_RX_DATA[0]
+set_location_assignment PIN_D16 -to ENET0_RX_DATA[1]
+set_location_assignment PIN_D17 -to ENET0_RX_DATA[2]
+set_location_assignment PIN_C15 -to ENET0_RX_DATA[3]
+set_location_assignment PIN_C17 -to ENET0_RX_DV
+set_location_assignment PIN_C18 -to ENET0_TX_DATA[0]
+set_location_assignment PIN_D19 -to ENET0_TX_DATA[1]
+set_location_assignment PIN_A19 -to ENET0_TX_DATA[2]
+set_location_assignment PIN_B19 -to ENET0_TX_DATA[3]
+set_location_assignment PIN_A18 -to ENET0_TX_EN
 
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_GTX_CLK
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_INT_N
-set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_MDC
-set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_MDIO
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_RST_N
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_RX_CLK
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_RX_DATA[0]
@@ -362,27 +357,23 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_TX_EN
 #============================================================
 # Ethernet ENET1  (egress / LAN side)
 #============================================================
-set_location_assignment PIN_G6  -to ENET1_GTX_CLK
-set_location_assignment PIN_G5  -to ENET1_INT_N
-set_location_assignment PIN_F6  -to ENET1_MDC
-set_location_assignment PIN_D7  -to ENET1_MDIO
-set_location_assignment PIN_E7  -to ENET1_RST_N
-set_location_assignment PIN_E9  -to ENET1_RX_CLK
-set_location_assignment PIN_D9  -to ENET1_RX_DATA[0]
-set_location_assignment PIN_E10 -to ENET1_RX_DATA[1]
-set_location_assignment PIN_D10 -to ENET1_RX_DATA[2]
-set_location_assignment PIN_E11 -to ENET1_RX_DATA[3]
-set_location_assignment PIN_F11 -to ENET1_RX_DV
-set_location_assignment PIN_E8  -to ENET1_TX_DATA[0]
-set_location_assignment PIN_F8  -to ENET1_TX_DATA[1]
-set_location_assignment PIN_F9  -to ENET1_TX_DATA[2]
-set_location_assignment PIN_G7  -to ENET1_TX_DATA[3]
-set_location_assignment PIN_G8  -to ENET1_TX_EN
+set_location_assignment PIN_C23 -to ENET1_GTX_CLK
+set_location_assignment PIN_D24 -to ENET1_INT_N
+set_location_assignment PIN_D22 -to ENET1_RST_N
+set_location_assignment PIN_B15 -to ENET1_RX_CLK
+set_location_assignment PIN_B23 -to ENET1_RX_DATA[0]
+set_location_assignment PIN_C21 -to ENET1_RX_DATA[1]
+set_location_assignment PIN_A23 -to ENET1_RX_DATA[2]
+set_location_assignment PIN_D21 -to ENET1_RX_DATA[3]
+set_location_assignment PIN_A22 -to ENET1_RX_DV
+set_location_assignment PIN_C25 -to ENET1_TX_DATA[0]
+set_location_assignment PIN_A26 -to ENET1_TX_DATA[1]
+set_location_assignment PIN_B26 -to ENET1_TX_DATA[2]
+set_location_assignment PIN_C26 -to ENET1_TX_DATA[3]
+set_location_assignment PIN_B25 -to ENET1_TX_EN
 
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_GTX_CLK
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_INT_N
-set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_MDC
-set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_MDIO
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_RST_N
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_RX_CLK
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_RX_DATA[0]
@@ -395,3 +386,12 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_TX_DATA[1]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_TX_DATA[2]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_TX_DATA[3]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET1_TX_EN
+
+set_global_assignment -name LAST_QUARTUS_VERSION "24.1std.0 Lite Edition"
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
+
+
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

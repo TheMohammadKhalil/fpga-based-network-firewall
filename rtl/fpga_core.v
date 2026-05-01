@@ -31,8 +31,9 @@ THE SOFTWARE.
 /*
  * FPGA core — inline Ethernet firewall for Terasic DE2-115
  *
- * Packet path (unidirectional):
+ * Packet paths:
  *   ENET0 RX  -->  fpga_firewall_top  -->  ENET1 TX
+ *   ENET1 RX  -->  fpga_firewall_top  -->  ENET0 TX
  *
  * Configuration (via SW[3:0]):
  *   SW[0]  enforce destination MAC  (allow_dst_mac register)
@@ -46,9 +47,14 @@ THE SOFTWARE.
  *   host-side config bus (not wired in this demo) would be needed.
  *
  * Status LEDs:
- *   LEDG[0]  packet allowed (stretches 1 M cycles for visibility)
- *   LEDG[1]  packet dropped (stretches 1 M cycles for visibility)
- *   LEDR     mirror of SW switches
+ *   LEDG[0]  allowed packet pulse
+ *   LEDG[1]  dropped packet pulse
+ *   LEDG[5:2] mirror SW[3:0] for quick board bring-up
+ *   LEDG[6]  SW[17] config-mode indicator
+ *   LEDG[7]  system out of reset
+ *   LEDG[8]  heartbeat
+ *   LEDR[7:4] dropped packet pulse bar
+ *   LEDR[17:8], LEDR[3:0] mirror SW switches
  *
  * HEX displays (common-anode, active-low segments):
  *   HEX7-4   allowed packet count (16-bit, hex digits)
@@ -98,14 +104,22 @@ module fpga_core #(
 );
 
 // ---------------------------------------------------------------------------
-// ENET0 MAC (ingress — only RX used)
+// ENET0 MAC
 // ---------------------------------------------------------------------------
 wire [7:0] mac0_rx_tdata;
 wire       mac0_rx_tvalid;
 wire       mac0_rx_tlast;
 wire       mac0_rx_tuser;   // CRC error flag
+wire       mac0_rx_error_bad_frame;
+wire       mac0_rx_error_bad_fcs;
+wire [1:0] mac0_speed;
 
-wire mac0_rx_clk, mac0_rx_rst;
+wire [7:0] mac0_tx_tdata;
+wire       mac0_tx_tvalid;
+wire       mac0_tx_tready;
+wire       mac0_tx_tlast;
+
+wire mac0_rx_clk_unused, mac0_rx_rst_unused;
 wire mac0_tx_clk, mac0_tx_rst;
 
 eth_mac_1g_rgmii #(
@@ -120,28 +134,29 @@ eth_mac0_inst (
     .gtx_clk(clk),
     .gtx_clk90(clk90),
     .gtx_rst(rst),
-    .rx_clk(mac0_rx_clk),
-    .rx_rst(mac0_rx_rst),
+    .rx_clk(mac0_rx_clk_unused),
+    .rx_rst(mac0_rx_rst_unused),
     .tx_clk(mac0_tx_clk),
     .tx_rst(mac0_tx_rst),
 
-    // TX — tied off (not transmitting on ingress port)
-    .tx_axis_tdata(8'd0),
-    .tx_axis_tvalid(1'b0),
-    .tx_axis_tready(),
-    .tx_axis_tlast(1'b0),
+    // TX — reverse direction, ENET1 RX -> firewall -> ENET0 TX
+    .tx_axis_tdata(mac0_tx_tdata),
+    .tx_axis_tvalid(mac0_tx_tvalid),
+    .tx_axis_tready(mac0_tx_tready),
+    .tx_axis_tlast(mac0_tx_tlast),
     .tx_axis_tuser(1'b0),
 
-    // RX — passes to firewall
-    .rx_axis_tdata(mac0_rx_tdata),
-    .rx_axis_tvalid(mac0_rx_tvalid),
-    .rx_axis_tlast(mac0_rx_tlast),
-    .rx_axis_tuser(mac0_rx_tuser),
+    // RX data is handled by a board-specific RGMII receiver below.
+    // Keep the RX clock connected so the MAC TX path tracks PHY link speed.
+    .rx_axis_tdata(),
+    .rx_axis_tvalid(),
+    .rx_axis_tlast(),
+    .rx_axis_tuser(),
 
     // RGMII pins
     .rgmii_rx_clk(phy0_rx_clk),
-    .rgmii_rxd(phy0_rxd),
-    .rgmii_rx_ctl(phy0_rx_ctl),
+    .rgmii_rxd(4'd0),
+    .rgmii_rx_ctl(1'b0),
     .rgmii_tx_clk(phy0_tx_clk),
     .rgmii_txd(phy0_txd),
     .rgmii_tx_ctl(phy0_tx_ctl),
@@ -150,7 +165,7 @@ eth_mac0_inst (
     .tx_error_underflow(),
     .rx_error_bad_frame(),
     .rx_error_bad_fcs(),
-    .speed(),
+    .speed(mac0_speed),
 
     .cfg_ifg(8'd12),
     .cfg_tx_enable(1'b1),
@@ -159,15 +174,35 @@ eth_mac0_inst (
 
 assign phy0_reset_n = ~rst;
 
+de2_rgmii_rx de2_rgmii_rx0_inst (
+    .rst(rst),
+    .rgmii_rx_clk(phy0_rx_clk),
+    .rgmii_rxd(phy0_rxd),
+    .rgmii_rx_ctl(phy0_rx_ctl),
+    .m_axis_tdata(mac0_rx_tdata),
+    .m_axis_tvalid(mac0_rx_tvalid),
+    .m_axis_tlast(mac0_rx_tlast),
+    .m_axis_tuser(mac0_rx_tuser),
+    .error_bad_frame(mac0_rx_error_bad_frame),
+    .error_bad_fcs(mac0_rx_error_bad_fcs)
+);
+
 // ---------------------------------------------------------------------------
-// ENET1 MAC (egress — only TX used)
+// ENET1 MAC
 // ---------------------------------------------------------------------------
+wire [7:0] mac1_rx_tdata;
+wire       mac1_rx_tvalid;
+wire       mac1_rx_tlast;
+wire       mac1_rx_tuser;   // CRC error flag
+wire       mac1_rx_error_bad_frame;
+wire       mac1_rx_error_bad_fcs;
+
 wire [7:0] mac1_tx_tdata;
 wire       mac1_tx_tvalid;
 wire       mac1_tx_tready;
 wire       mac1_tx_tlast;
 
-wire mac1_rx_clk, mac1_rx_rst;
+wire mac1_rx_clk_unused, mac1_rx_rst_unused;
 wire mac1_tx_clk, mac1_tx_rst;
 
 eth_mac_1g_rgmii #(
@@ -182,8 +217,8 @@ eth_mac1_inst (
     .gtx_clk(clk),
     .gtx_clk90(clk90),
     .gtx_rst(rst),
-    .rx_clk(mac1_rx_clk),
-    .rx_rst(mac1_rx_rst),
+    .rx_clk(mac1_rx_clk_unused),
+    .rx_rst(mac1_rx_rst_unused),
     .tx_clk(mac1_tx_clk),
     .tx_rst(mac1_tx_rst),
 
@@ -194,7 +229,8 @@ eth_mac1_inst (
     .tx_axis_tlast(mac1_tx_tlast),
     .tx_axis_tuser(1'b0),
 
-    // RX — ignored (not receiving on egress port)
+    // RX data is handled by a board-specific RGMII receiver below.
+    // Keep the RX clock connected so the MAC TX path tracks PHY link speed.
     .rx_axis_tdata(),
     .rx_axis_tvalid(),
     .rx_axis_tlast(),
@@ -202,8 +238,8 @@ eth_mac1_inst (
 
     // RGMII pins
     .rgmii_rx_clk(phy1_rx_clk),
-    .rgmii_rxd(phy1_rxd),
-    .rgmii_rx_ctl(phy1_rx_ctl),
+    .rgmii_rxd(4'd0),
+    .rgmii_rx_ctl(1'b0),
     .rgmii_tx_clk(phy1_tx_clk),
     .rgmii_txd(phy1_txd),
     .rgmii_tx_ctl(phy1_tx_ctl),
@@ -220,6 +256,19 @@ eth_mac1_inst (
 );
 
 assign phy1_reset_n = ~rst;
+
+de2_rgmii_rx de2_rgmii_rx1_inst (
+    .rst(rst),
+    .rgmii_rx_clk(phy1_rx_clk),
+    .rgmii_rxd(phy1_rxd),
+    .rgmii_rx_ctl(phy1_rx_ctl),
+    .m_axis_tdata(mac1_rx_tdata),
+    .m_axis_tvalid(mac1_rx_tvalid),
+    .m_axis_tlast(mac1_rx_tlast),
+    .m_axis_tuser(mac1_rx_tuser),
+    .error_bad_frame(mac1_rx_error_bad_frame),
+    .error_bad_fcs(mac1_rx_error_bad_fcs)
+);
 
 // ---------------------------------------------------------------------------
 // Firewall configuration bus — directly from physical SW pins (no latches).
@@ -261,61 +310,47 @@ wire [31:0] cfg_wdata = sw[17] ? {14'd0, sw[17:0]}     // 18 non-constant bits
                                 : {28'd0, sw[3:0]};    // L2 control bits
 
 // ---------------------------------------------------------------------------
-// RX FIFO — buffers incoming frames from ENET0 MAC (clk domain)
+// Bidirectional firewall pipelines
+//
+//   0_to_1: ENET0 RX -> firewall -> ENET1 TX
+//   1_to_0: ENET1 RX -> firewall -> ENET0 TX
+//
+// Your PC-to-router traffic enters the reverse path in a normal inline setup,
+// so the packet counters must include both directions.
 // ---------------------------------------------------------------------------
-wire [7:0] rx_fifo_tdata;
-wire       rx_fifo_tvalid;
-wire       rx_fifo_tready;
-wire       rx_fifo_tlast;
 
-axis_fifo #(
+wire [7:0] rx0_fifo_tdata;
+wire       rx0_fifo_tvalid;
+wire       rx0_fifo_tready;
+wire       rx0_fifo_tlast;
+wire       rx0_fifo_tuser;
+
+axis_async_fifo #(
     .DEPTH(2048),
     .DATA_WIDTH(8),
-    .KEEP_ENABLE(0),
-    .LAST_ENABLE(1),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .FRAME_FIFO(0)
-) rx_fifo_inst (
-    .clk(clk),
-    .rst(rst),
-    // sink
+    .USER_WIDTH(1)
+) rx0_fifo_inst (
+    .s_clk(phy0_rx_clk),
+    .s_rst(rst),
     .s_axis_tdata(mac0_rx_tdata),
-    .s_axis_tkeep(1'b1),
     .s_axis_tvalid(mac0_rx_tvalid),
     .s_axis_tready(),
     .s_axis_tlast(mac0_rx_tlast),
-    .s_axis_tid(1'b0),
-    .s_axis_tdest(1'b0),
     .s_axis_tuser(mac0_rx_tuser),
-    // source
-    .m_axis_tdata(rx_fifo_tdata),
-    .m_axis_tkeep(),
-    .m_axis_tvalid(rx_fifo_tvalid),
-    .m_axis_tready(rx_fifo_tready),
-    .m_axis_tlast(rx_fifo_tlast),
-    .m_axis_tid(),
-    .m_axis_tdest(),
-    .m_axis_tuser(),
-    // unused
-    .pause_req(1'b0),
-    .pause_ack(),
-    .status_depth(),
-    .status_depth_commit(),
-    .status_overflow(),
-    .status_bad_frame(),
-    .status_good_frame()
+
+    .m_clk(clk),
+    .m_rst(rst),
+    .m_axis_tdata(rx0_fifo_tdata),
+    .m_axis_tvalid(rx0_fifo_tvalid),
+    .m_axis_tready(rx0_fifo_tready),
+    .m_axis_tlast(rx0_fifo_tlast),
+    .m_axis_tuser(rx0_fifo_tuser)
 );
 
-// ---------------------------------------------------------------------------
-// TX FIFO — buffers outgoing frames toward ENET1 MAC (clk domain)
-// ---------------------------------------------------------------------------
-wire [7:0] tx_fifo_tdata;
-wire       tx_fifo_tvalid;
-wire       tx_fifo_tready;
-wire       tx_fifo_tlast;
+wire [7:0] tx1_fifo_tdata;
+wire       tx1_fifo_tvalid;
+wire       tx1_fifo_tready;
+wire       tx1_fifo_tlast;
 
 axis_fifo #(
     .DEPTH(2048),
@@ -327,19 +362,17 @@ axis_fifo #(
     .USER_ENABLE(0),
     .USER_WIDTH(1),
     .FRAME_FIFO(0)
-) tx_fifo_inst (
+) tx1_fifo_inst (
     .clk(clk),
     .rst(rst),
-    // sink (from firewall)
-    .s_axis_tdata(tx_fifo_tdata),
+    .s_axis_tdata(tx1_fifo_tdata),
     .s_axis_tkeep(1'b1),
-    .s_axis_tvalid(tx_fifo_tvalid),
-    .s_axis_tready(tx_fifo_tready),
-    .s_axis_tlast(tx_fifo_tlast),
+    .s_axis_tvalid(tx1_fifo_tvalid),
+    .s_axis_tready(tx1_fifo_tready),
+    .s_axis_tlast(tx1_fifo_tlast),
     .s_axis_tid(1'b0),
     .s_axis_tdest(1'b0),
     .s_axis_tuser(1'b0),
-    // source (to MAC1 TX)
     .m_axis_tdata(mac1_tx_tdata),
     .m_axis_tkeep(),
     .m_axis_tvalid(mac1_tx_tvalid),
@@ -348,7 +381,6 @@ axis_fifo #(
     .m_axis_tid(),
     .m_axis_tdest(),
     .m_axis_tuser(),
-    // unused
     .pause_req(1'b0),
     .pause_ack(),
     .status_depth(),
@@ -358,40 +390,127 @@ axis_fifo #(
     .status_good_frame()
 );
 
-// ---------------------------------------------------------------------------
-// Firewall pipeline
-// ---------------------------------------------------------------------------
-wire fw_packet_allowed;
-wire fw_packet_dropped;
+wire fw01_packet_allowed;
+wire fw01_packet_dropped;
 
-fpga_firewall_top firewall_inst (
+fpga_firewall_top firewall_0_to_1_inst (
     .clk(clk),
     .rst(rst),
-
-    // Input: RX FIFO output (buffered ENET0 MAC RX)
-    .s_axis_tdata(rx_fifo_tdata),
-    .s_axis_tvalid(rx_fifo_tvalid),
-    .s_axis_tlast(rx_fifo_tlast),
-    .s_axis_tready(rx_fifo_tready),
-
-    // Output: TX FIFO input (toward ENET1 MAC TX)
-    .m_axis_tdata(tx_fifo_tdata),
-    .m_axis_tvalid(tx_fifo_tvalid),
-    .m_axis_tlast(tx_fifo_tlast),
-    .m_axis_tready(tx_fifo_tready),
-
-    // Configuration
+    .s_axis_tdata(rx0_fifo_tdata),
+    .s_axis_tvalid(rx0_fifo_tvalid),
+    .s_axis_tlast(rx0_fifo_tlast),
+    .s_axis_tready(rx0_fifo_tready),
+    .m_axis_tdata(tx1_fifo_tdata),
+    .m_axis_tvalid(tx1_fifo_tvalid),
+    .m_axis_tlast(tx1_fifo_tlast),
+    .m_axis_tready(tx1_fifo_tready),
     .cfg_we(cfg_we),
     .cfg_addr(cfg_addr),
     .cfg_wdata(cfg_wdata),
-
-    // CRC error flag from ENET0 MAC
-    .crc_error_in(mac0_rx_tuser),
-
-    // Status
-    .packet_allowed(fw_packet_allowed),
-    .packet_dropped(fw_packet_dropped)
+    .crc_error_in(rx0_fifo_tuser),
+    .packet_allowed(fw01_packet_allowed),
+    .packet_dropped(fw01_packet_dropped)
 );
+
+wire [7:0] rx1_fifo_tdata;
+wire       rx1_fifo_tvalid;
+wire       rx1_fifo_tready;
+wire       rx1_fifo_tlast;
+wire       rx1_fifo_tuser;
+
+axis_async_fifo #(
+    .DEPTH(2048),
+    .DATA_WIDTH(8),
+    .USER_WIDTH(1)
+) rx1_fifo_inst (
+    .s_clk(phy1_rx_clk),
+    .s_rst(rst),
+    .s_axis_tdata(mac1_rx_tdata),
+    .s_axis_tvalid(mac1_rx_tvalid),
+    .s_axis_tready(),
+    .s_axis_tlast(mac1_rx_tlast),
+    .s_axis_tuser(mac1_rx_tuser),
+
+    .m_clk(clk),
+    .m_rst(rst),
+    .m_axis_tdata(rx1_fifo_tdata),
+    .m_axis_tvalid(rx1_fifo_tvalid),
+    .m_axis_tready(rx1_fifo_tready),
+    .m_axis_tlast(rx1_fifo_tlast),
+    .m_axis_tuser(rx1_fifo_tuser)
+);
+
+wire [7:0] tx0_fifo_tdata;
+wire       tx0_fifo_tvalid;
+wire       tx0_fifo_tready;
+wire       tx0_fifo_tlast;
+
+axis_fifo #(
+    .DEPTH(2048),
+    .DATA_WIDTH(8),
+    .KEEP_ENABLE(0),
+    .LAST_ENABLE(1),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(0),
+    .USER_WIDTH(1),
+    .FRAME_FIFO(0)
+) tx0_fifo_inst (
+    .clk(clk),
+    .rst(rst),
+    .s_axis_tdata(tx0_fifo_tdata),
+    .s_axis_tkeep(1'b1),
+    .s_axis_tvalid(tx0_fifo_tvalid),
+    .s_axis_tready(tx0_fifo_tready),
+    .s_axis_tlast(tx0_fifo_tlast),
+    .s_axis_tid(1'b0),
+    .s_axis_tdest(1'b0),
+    .s_axis_tuser(1'b0),
+    .m_axis_tdata(mac0_tx_tdata),
+    .m_axis_tkeep(),
+    .m_axis_tvalid(mac0_tx_tvalid),
+    .m_axis_tready(mac0_tx_tready),
+    .m_axis_tlast(mac0_tx_tlast),
+    .m_axis_tid(),
+    .m_axis_tdest(),
+    .m_axis_tuser(),
+    .pause_req(1'b0),
+    .pause_ack(),
+    .status_depth(),
+    .status_depth_commit(),
+    .status_overflow(),
+    .status_bad_frame(),
+    .status_good_frame()
+);
+
+wire fw10_packet_allowed;
+wire fw10_packet_dropped;
+
+fpga_firewall_top firewall_1_to_0_inst (
+    .clk(clk),
+    .rst(rst),
+    .s_axis_tdata(rx1_fifo_tdata),
+    .s_axis_tvalid(rx1_fifo_tvalid),
+    .s_axis_tlast(rx1_fifo_tlast),
+    .s_axis_tready(rx1_fifo_tready),
+    .m_axis_tdata(tx0_fifo_tdata),
+    .m_axis_tvalid(tx0_fifo_tvalid),
+    .m_axis_tlast(tx0_fifo_tlast),
+    .m_axis_tready(tx0_fifo_tready),
+    .cfg_we(cfg_we),
+    .cfg_addr(cfg_addr),
+    .cfg_wdata(cfg_wdata),
+    .crc_error_in(rx1_fifo_tuser),
+    .packet_allowed(fw10_packet_allowed),
+    .packet_dropped(fw10_packet_dropped)
+);
+
+wire [1:0] packet_allowed_inc = {1'b0, fw01_packet_allowed} +
+                                {1'b0, fw10_packet_allowed};
+wire [1:0] packet_dropped_inc = {1'b0, fw01_packet_dropped} +
+                                {1'b0, fw10_packet_dropped};
+wire       any_packet_allowed = |packet_allowed_inc;
+wire       any_packet_dropped = |packet_dropped_inc;
 
 // ---------------------------------------------------------------------------
 // Packet counters (16-bit, wrap)
@@ -404,38 +523,53 @@ always @(posedge clk) begin
         allowed_count <= 16'd0;
         dropped_count <= 16'd0;
     end else begin
-        if (fw_packet_allowed) allowed_count <= allowed_count + 16'd1;
-        if (fw_packet_dropped) dropped_count <= dropped_count + 16'd1;
+        allowed_count <= allowed_count + {14'd0, packet_allowed_inc};
+        dropped_count <= dropped_count + {14'd0, packet_dropped_inc};
     end
 end
 
 // ---------------------------------------------------------------------------
-// LED stretching (1 M cycles ~ 8 ms at 125 MHz)
+// LED stretching and bring-up indicators
+//
+// The packet status outputs from the firewall are one clk-cycle pulses.
+// Stretch them just long enough to see while keeping allowed and dropped
+// indications visually separate during normal ping traffic.
 // ---------------------------------------------------------------------------
-reg [19:0] allowed_stretch;
-reg [19:0] dropped_stretch;
+reg [25:0] allowed_stretch;
+reg [25:0] dropped_stretch;
+reg [25:0] heartbeat_div;
+
+localparam [25:0] STATUS_STRETCH_CYCLES = 26'd15_625_000; // 125 ms @ 125 MHz
 
 always @(posedge clk) begin
     if (rst) begin
-        allowed_stretch <= 20'd0;
-        dropped_stretch <= 20'd0;
+        allowed_stretch <= 26'd0;
+        dropped_stretch <= 26'd0;
+        heartbeat_div   <= 26'd0;
     end else begin
-        if (fw_packet_allowed)
-            allowed_stretch <= 20'hFFFFF;
-        else if (allowed_stretch != 20'd0)
-            allowed_stretch <= allowed_stretch - 20'd1;
+        heartbeat_div <= heartbeat_div + 26'd1;
 
-        if (fw_packet_dropped)
-            dropped_stretch <= 20'hFFFFF;
-        else if (dropped_stretch != 20'd0)
-            dropped_stretch <= dropped_stretch - 20'd1;
+        if (any_packet_allowed)
+            allowed_stretch <= STATUS_STRETCH_CYCLES;
+        else if (allowed_stretch != 26'd0)
+            allowed_stretch <= allowed_stretch - 26'd1;
+
+        if (any_packet_dropped)
+            dropped_stretch <= STATUS_STRETCH_CYCLES;
+        else if (dropped_stretch != 26'd0)
+            dropped_stretch <= dropped_stretch - 26'd1;
     end
 end
 
-assign ledg[0] = (allowed_stretch != 20'd0);
-assign ledg[1] = (dropped_stretch != 20'd0);
-assign ledg[8:2] = 7'd0;
-assign ledr = sw;
+assign ledg[0] = (allowed_stretch != 26'd0);
+assign ledg[1] = (dropped_stretch != 26'd0);
+assign ledg[5:2] = sw[3:0];
+assign ledg[6] = sw[17];
+assign ledg[7] = ~rst;
+assign ledg[8] = heartbeat_div[25];
+assign ledr[17:8] = sw[17:8];
+assign ledr[7:4] = (dropped_stretch != 26'd0) ? 4'b1111 : 4'b0000;
+assign ledr[3:0] = sw[3:0];
 
 // ---------------------------------------------------------------------------
 // 7-segment display: common-anode, active-low segments

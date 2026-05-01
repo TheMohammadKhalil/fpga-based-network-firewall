@@ -18,8 +18,8 @@
  * happens to be in those byte positions; the rule matcher ignores them
  * unless the protocol is TCP (0x06).
  *
- * Outputs become valid when l4_header_valid pulses (after byte 47,
- * i.e. after TCP flags are captured).
+ * Outputs become valid when l4_header_valid pulses after the TCP window
+ * field is fully captured.
  */
 module tcp_udp_header_extract (
     input  wire        clk,
@@ -95,12 +95,12 @@ always @(posedge clk or posedge rst) begin
                 L4_START + 10: tcp_ack_num[15:8]  <= s_axis_tdata;
                 L4_START + 11: tcp_ack_num[7:0]   <= s_axis_tdata;
                 // byte 46 = data offset / reserved / NS — not stored
-                L4_START + 13: begin
-                    tcp_flags       <= s_axis_tdata;   // TCP control flags
-                    l4_header_valid <= 1'b1;
-                end
+                L4_START + 13: tcp_flags <= s_axis_tdata;   // TCP control flags
                 L4_START + 14: tcp_window[15:8] <= s_axis_tdata;
-                L4_START + 15: tcp_window[7:0]  <= s_axis_tdata;
+                L4_START + 15: begin
+                    tcp_window[7:0]  <= s_axis_tdata;
+                    l4_header_valid   <= 1'b1;
+                end
                 default: ;
             endcase
 

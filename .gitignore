@@ -1,3 +1,19 @@
 db/
 db/
 .claude/
+.codex
+
+# Quartus generated outputs
+incremental_db/
+output_files/
+*.rpt
+*.summary
+*.smsg
+*.sof
+*.pof
+*.jic
+*.cdf
+*.done
+*.jdi
+*.pin
+*.sld

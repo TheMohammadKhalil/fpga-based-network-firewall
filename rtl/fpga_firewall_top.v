@@ -103,11 +103,29 @@ wire [15:0] parsed_frame_length;
 wire        parsed_header_valid;
 wire        parsed_frame_done;
 
+// Header parsers must only advance state on cycles where a byte is actually
+// consumed. firewall_rx_parser holds s_axis_tready=0 while it streams the
+// previous frame out, but the upstream FIFO keeps tvalid asserted on the
+// next frame's first byte during that window. Feeding raw tvalid into the
+// parsers makes them count the same held byte over and over, so by the time
+// the rx_parser reopens its input the parsers are already past byte 47 and
+// produce garbage L2/L3/L4 fields.
+wire byte_accepted = s_axis_tvalid && s_axis_tready;
+reg  frame_crc_error;
+
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        frame_crc_error <= 1'b0;
+    end else if (byte_accepted && s_axis_tlast) begin
+        frame_crc_error <= crc_error_in;
+    end
+end
+
 eth_header_extract eth_header_extract_inst (
     .clk(clk),
     .rst(rst),
     .s_axis_tdata(s_axis_tdata),
-    .s_axis_tvalid(s_axis_tvalid),
+    .s_axis_tvalid(byte_accepted),
     .s_axis_tlast(s_axis_tlast),
     .dst_mac(parsed_dst_mac),
     .src_mac(parsed_src_mac),
@@ -142,7 +160,7 @@ ip_header_extract ip_header_extract_inst (
     .clk(clk),
     .rst(rst),
     .s_axis_tdata(s_axis_tdata),
-    .s_axis_tvalid(s_axis_tvalid),
+    .s_axis_tvalid(byte_accepted),
     .s_axis_tlast(s_axis_tlast),
     .ip_version(ip_version),
     .ip_ihl(ip_ihl),
@@ -178,7 +196,7 @@ tcp_udp_header_extract tcp_udp_header_extract_inst (
     .clk(clk),
     .rst(rst),
     .s_axis_tdata(s_axis_tdata),
-    .s_axis_tvalid(s_axis_tvalid),
+    .s_axis_tvalid(byte_accepted),
     .s_axis_tlast(s_axis_tlast),
     .l4_src_port(l4_src_port),
     .l4_dst_port(l4_dst_port),
@@ -229,7 +247,7 @@ header_context_store header_context_store_inst (
     .in_src_mac(parsed_src_mac),
     .in_ethertype(parsed_ethertype),
     .in_frame_length(parsed_frame_length),
-    .in_crc_error(crc_error_in),
+    .in_crc_error(frame_crc_error),
     .header_valid(parsed_header_valid),
     .frame_done(parsed_frame_done),
     // L3
@@ -393,8 +411,9 @@ firewall_l3_rule_match_inst (
     .allow_packet(l3_allow)
 );
 
-// Final decision: packet must pass BOTH L2 and L3/L4 checks
-assign packet_allowed = l2_allow && l3_allow;
+// Final decision: packet must pass BOTH L2 and L3/L4 checks while context is valid.
+wire allow_frame;
+assign allow_frame = ctx_valid && l2_allow && l3_allow;
 
 // ==========================================================================
 // Frame buffer (stores Ethernet payload after L2 header)
@@ -428,21 +447,82 @@ wire [7:0]  allowed_payload_tdata;
 wire        allowed_payload_tvalid;
 wire        allowed_payload_tlast;
 wire        allowed_payload_tready;
+wire        decision_payload_tready;
+
+reg         frame_buffered_d;
+reg         frame_buffered_d2;
+reg  [3:0]  frame_context_ready_pipe;
+reg         frame_allow_latched;
+reg         frame_decision_valid;
+reg         packet_allowed_reg;
+reg         packet_dropped_reg;
+
+wire        frame_buffered_rise;
+wire        frame_context_ready;
+
+assign frame_buffered_rise = frame_buffered_d && !frame_buffered_d2;
+assign frame_context_ready = frame_context_ready_pipe[3];
+
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        frame_buffered_d     <= 1'b0;
+        frame_buffered_d2    <= 1'b0;
+        frame_context_ready_pipe <= 4'd0;
+        frame_allow_latched  <= 1'b0;
+        frame_decision_valid <= 1'b0;
+        packet_allowed_reg   <= 1'b0;
+        packet_dropped_reg   <= 1'b0;
+    end else begin
+        frame_buffered_d  <= frame_buffered;
+        frame_buffered_d2 <= frame_buffered_d;
+        frame_context_ready_pipe <= {frame_context_ready_pipe[2:0], frame_buffered_rise};
+
+        packet_allowed_reg <= 1'b0;
+        packet_dropped_reg <= 1'b0;
+
+        // frame_buffered rises on the same edge that eth_header_extract
+        // raises frame_done.  Wait a few cycles so frame length/CRC are
+        // latched and the L2/L3/L4 allow decision has time to settle before
+        // sampling allow_frame.
+        if (frame_context_ready) begin
+            frame_allow_latched  <= allow_frame;
+            frame_decision_valid <= 1'b1;
+            packet_allowed_reg   <= allow_frame;
+            packet_dropped_reg   <= !allow_frame;
+        end
+
+        if (frame_decision_valid &&
+            rx_payload_tvalid &&
+            decision_payload_tready &&
+            rx_payload_tlast) begin
+            frame_decision_valid <= 1'b0;
+        end
+
+        if (frame_decision_valid && !frame_buffered && !rx_payload_tvalid) begin
+            frame_decision_valid <= 1'b0;
+        end
+    end
+end
 
 firewall_decision firewall_decision_inst (
     .clk(clk),
     .rst(rst),
-    .allow_packet(packet_allowed),
+    .allow_packet(frame_allow_latched),
     .s_axis_tdata(rx_payload_tdata),
-    .s_axis_tvalid(rx_payload_tvalid),
+    .s_axis_tvalid(frame_decision_valid && rx_payload_tvalid),
     .s_axis_tlast(rx_payload_tlast),
-    .s_axis_tready(rx_payload_tready),
+    .s_axis_tready(decision_payload_tready),
     .m_axis_tdata(allowed_payload_tdata),
     .m_axis_tvalid(allowed_payload_tvalid),
     .m_axis_tlast(allowed_payload_tlast),
     .m_axis_tready(allowed_payload_tready),
-    .drop_pulse(packet_dropped)
+    .drop_pulse()
 );
+
+assign rx_payload_tready = frame_decision_valid && decision_payload_tready;
+
+assign packet_allowed = packet_allowed_reg;
+assign packet_dropped = packet_dropped_reg;
 
 // ==========================================================================
 // TX rebuild (prepend Ethernet header to allowed payload)

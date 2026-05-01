@@ -24,8 +24,6 @@ reg             buffering;
 reg             streaming;
 
 // Ready to accept RX data whenever not in the streaming-out phase.
-// During buffering we keep accepting; tready=0 only when we are replaying
-// the buffered payload so that no new frame clobbers the buffer.
 assign s_axis_tready = !streaming;
 
 always @(posedge clk or posedge rst) begin
@@ -41,19 +39,13 @@ always @(posedge clk or posedge rst) begin
         m_axis_tvalid  <= 1'b0;
         m_axis_tlast   <= 1'b0;
     end else begin
-        m_axis_tvalid <= 1'b0;
-        m_axis_tlast  <= 1'b0;
-
         // Buffering phase: capture incoming frame.
-        // Accept data whenever valid and not in the streaming-out phase.
-        // The s_axis_tready == !streaming, so data arrives when !streaming.
         if (!streaming && s_axis_tvalid) begin
             if (!buffering) begin
-                // First byte of a new frame — start buffering, byte_count=0
+                // First byte of a new frame
                 buffering     <= 1'b1;
-                byte_count    <= 16'd1;   // first byte consumed this cycle
+                byte_count    <= 16'd1;
                 payload_count <= 16'd0;
-                // byte 0 is never payload (header starts here), no store needed
             end else begin
                 // Subsequent bytes of the same frame
                 if (byte_count >= 16'd14 && payload_count < MAX_FRAME_BYTES) begin
@@ -63,7 +55,8 @@ always @(posedge clk or posedge rst) begin
 
                 if (s_axis_tlast) begin
                     buffering      <= 1'b0;
-                    payload_length <= payload_count;
+                    payload_length <= (byte_count >= 16'd14 && payload_count < MAX_FRAME_BYTES) ?
+                        (payload_count + 16'd1) : payload_count;
                     frame_buffered <= 1'b1;
                     streaming      <= 1'b1;
                     rd_ptr         <= {PTR_W{1'b0}};
@@ -73,17 +66,24 @@ always @(posedge clk or posedge rst) begin
             end
         end
 
-        // Streaming phase: output buffered payload
-        if (streaming && frame_buffered && m_axis_tready) begin
+        // Proper AXI-Stream skid on output: clear tvalid only when consumed.
+        if (m_axis_tvalid && m_axis_tready) begin
+            m_axis_tvalid <= 1'b0;
+            m_axis_tlast  <= 1'b0;
+        end
+
+        // Emit one byte per cycle, but only when the output register is empty
+        // or being consumed this cycle. Holds tvalid until consumed.
+        if (streaming && frame_buffered && (!m_axis_tvalid || m_axis_tready)) begin
             if (rd_ptr < payload_length) begin
                 m_axis_tdata  <= payload_mem[rd_ptr];
                 m_axis_tvalid <= 1'b1;
                 if (rd_ptr == payload_length - 1'b1) begin
-                    m_axis_tlast  <= 1'b1;
-                    streaming     <= 1'b0;
-                    frame_buffered<= 1'b0;
-                    rd_ptr        <= {PTR_W{1'b0}};
-                    payload_count <= 16'd0;
+                    m_axis_tlast   <= 1'b1;
+                    streaming      <= 1'b0;
+                    frame_buffered <= 1'b0;
+                    rd_ptr         <= {PTR_W{1'b0}};
+                    payload_count  <= 16'd0;
                 end else begin
                     rd_ptr <= rd_ptr + 1'b1;
                 end

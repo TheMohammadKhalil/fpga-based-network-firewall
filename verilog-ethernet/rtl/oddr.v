@@ -56,7 +56,7 @@ if (TARGET == "ALTERA") begin : altera_odd
 
     if (WIDTH == 1) begin : single_bit
         altddio_out #(
-            .intended_device_family("Cyclone V"),
+            .intended_device_family("Cyclone IV E"),
             .invert_output("OFF"),
             .lpm_hint("UNUSED"),
             .lpm_type("altddio_out"),
@@ -77,7 +77,7 @@ if (TARGET == "ALTERA") begin : altera_odd
         genvar i;
         for (i = 0; i < WIDTH; i = i + 1) begin : bit_gen
             altddio_out #(
-                .intended_device_family("Cyclone V"),
+                .intended_device_family("Cyclone IV E"),
                 .invert_output("OFF"),
                 .lpm_hint("UNUSED"),
                 .lpm_type("altddio_out"),

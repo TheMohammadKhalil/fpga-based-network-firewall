@@ -52,23 +52,25 @@ module ssio_ddr_in #
 
 generate
 if (TARGET == "ALTERA") begin : altera_ssio
-    // Altera Cyclone V - use inferred DDR input
-    // Quartus will infer altddio_in from this pattern
-    genvar i;
-    for (i = 0; i < WIDTH; i = i + 1) begin : bit_gen
-        reg [1:0] ddr_capture;
-
-        always @(posedge input_clk) begin
-            ddr_capture <= {ddr_capture[0], input_d[i]};
-        end
-
-        // q1 = first sample, q2 = second sample
-        assign output_q1[i] = ddr_capture[1];
-        assign output_q2[i] = ddr_capture[0];
-
-        // Note: For proper RGMII, you may need to constrain this with
-        // input delay constraints in .qsf or use SignalTap to verify timing
-    end
+    // Use the vendor DDR input primitive so both RGMII edges are sampled.
+    altddio_in #(
+        .width(WIDTH),
+        .intended_device_family("Cyclone IV E"),
+        .power_up_high("OFF"),
+        .invert_input_clocks("OFF"),
+        .lpm_type("altddio_in")
+    )
+    altddio_in_inst (
+        .datain(input_d),
+        .inclock(input_clk),
+        .inclocken(1'b1),
+        .aclr(1'b0),
+        .aset(1'b0),
+        .sclr(1'b0),
+        .sset(1'b0),
+        .dataout_h(output_q1),
+        .dataout_l(output_q2)
+    );
 
 end else if (TARGET == "XILINX") begin : xilinx_ssio
 

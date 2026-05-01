@@ -87,6 +87,8 @@ module rgmii_phy_if #
 wire rgmii_rx_ctl_1;
 wire rgmii_rx_ctl_2;
 
+assign mac_gmii_rx_clk = phy_rgmii_rx_clk;
+
 ssio_ddr_in #
 (
     .TARGET(TARGET),
@@ -97,7 +99,7 @@ ssio_ddr_in #
 rx_ssio_ddr_inst (
     .input_clk(phy_rgmii_rx_clk),
     .input_d({phy_rgmii_rxd, phy_rgmii_rx_ctl}),
-    .output_clk(mac_gmii_rx_clk),
+    .output_clk(phy_rgmii_rx_clk),
     .output_q1({mac_gmii_rxd[3:0], rgmii_rx_ctl_1}),
     .output_q2({mac_gmii_rxd[7:4], rgmii_rx_ctl_2})
 );

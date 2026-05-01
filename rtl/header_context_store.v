@@ -10,7 +10,8 @@
  * Latches the parsed L2, L3, and L4 header fields into stable registers
  * so that the rule-match engines have a consistent snapshot for the
  * duration of the decision.  context_valid goes high after the L2 header
- * is captured and drops after the frame is fully received.
+ * is captured and remains asserted until the next frame overwrites the
+ * stored context or reset occurs.
  *
  * L3/L4 fields are captured opportunistically: they are latched whenever
  * the corresponding *_valid pulses arrive.  If the frame is too short
@@ -90,8 +91,6 @@ module header_context_store (
     output reg         context_valid
 );
 
-reg frame_done_delayed;
-
 always @(posedge clk or posedge rst) begin
     if (rst) begin
         out_dst_mac          <= 48'd0;
@@ -121,18 +120,42 @@ always @(posedge clk or posedge rst) begin
         out_tcp_flags        <= 8'd0;
         out_tcp_window       <= 16'd0;
         context_valid        <= 1'b0;
-        frame_done_delayed   <= 1'b0;
     end else begin
-        frame_done_delayed <= frame_done;
-
-        // Latch L2 fields when the Ethernet header is fully parsed
+        // Latch the L2 header fields as soon as they are available.
         if (header_valid) begin
             out_dst_mac      <= in_dst_mac;
             out_src_mac      <= in_src_mac;
             out_ethertype    <= in_ethertype;
+            context_valid    <= 1'b1;
+
+            out_is_ipv4          <= 1'b0;
+            out_ip_is_fragment   <= 1'b0;
+            out_ip_version       <= 4'd0;
+            out_ip_ihl           <= 4'd0;
+            out_ip_dscp          <= 6'd0;
+            out_ip_ecn           <= 2'd0;
+            out_ip_total_length  <= 16'd0;
+            out_ip_identification<= 16'd0;
+            out_ip_flags         <= 3'd0;
+            out_ip_frag_offset   <= 13'd0;
+            out_ip_ttl           <= 8'd0;
+            out_ip_protocol      <= 8'd0;
+            out_ip_hdr_checksum  <= 16'd0;
+            out_ip_src           <= 32'd0;
+            out_ip_dst           <= 32'd0;
+            out_l4_src_port      <= 16'd0;
+            out_l4_dst_port      <= 16'd0;
+            out_tcp_seq_num      <= 32'd0;
+            out_tcp_ack_num      <= 32'd0;
+            out_tcp_flags        <= 8'd0;
+            out_tcp_window       <= 16'd0;
+        end
+
+        // Latch final length/CRC status at end of frame.  The MAC reports
+        // these only after the whole frame has been received.
+        if (frame_done) begin
             out_frame_length <= in_frame_length;
             out_crc_error    <= in_crc_error;
-            context_valid    <= 1'b1;
         end
 
         // Latch L3 fields when the IPv4 header is fully parsed
@@ -162,13 +185,6 @@ always @(posedge clk or posedge rst) begin
             out_tcp_ack_num <= tcp_ack_num;
             out_tcp_flags   <= tcp_flags;
             out_tcp_window  <= tcp_window;
-        end
-
-        // Clear context after the frame is fully transmitted downstream
-        if (frame_done_delayed) begin
-            context_valid      <= 1'b0;
-            out_is_ipv4        <= 1'b0;
-            out_ip_is_fragment <= 1'b0;
         end
     end
 end

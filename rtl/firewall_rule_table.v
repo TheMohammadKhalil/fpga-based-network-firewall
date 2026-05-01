@@ -45,9 +45,13 @@
  *   addr 0x17  dst ports: {dst_port_max[15:0], dst_port_min[15:0]}
  *
  * Reset defaults
- *   All rules invalid (deny-all-IPv4 until configured by SW).
- *   This is intentional: it forces Quartus to preserve the full match engine
- *   because allow_packet = !is_ipv4 at reset (non-constant).
+ *   Rule 0 defaults to ALLOW with all match enables cleared, which means
+ *   "allow all IPv4" for first bring-up on hardware.
+ *   Remaining rules reset invalid.
+ *
+ *   This keeps the data path easy to test on the board while preserving the
+ *   full rule table in synthesis.  More specific rules can still be loaded
+ *   later through the config path.
  *
  * Synthesis notes
  *   All output regs are declared as internal registers with (* noprune *)
@@ -136,11 +140,10 @@ always @(posedge clk or posedge rst) begin
     if (rst) begin
         rule_idx <= 3'd0;
 
-        // Default: ALL rules invalid (deny-all IPv4 until configured).
-        // This ensures allow_packet = !is_ipv4 at reset, which is
-        // non-constant (depends on packet EtherType), forcing Quartus
-        // to preserve the entire L3 match engine.
-        rule_valid_r           <= {NUM_RULES{1'b0}};
+        // Default: rule 0 is a wildcard ALLOW rule for IPv4 bring-up.
+        // Any IPv4 packet matches rule 0 because all per-field match
+        // enables reset low.  Rules 1..N stay invalid until configured.
+        rule_valid_r           <= {{(NUM_RULES-1){1'b0}}, 1'b1};
         rule_action_r          <= {NUM_RULES{1'b1}}; // default action ALLOW
         rule_match_src_ip_r    <= {NUM_RULES{1'b0}};
         rule_match_dst_ip_r    <= {NUM_RULES{1'b0}};

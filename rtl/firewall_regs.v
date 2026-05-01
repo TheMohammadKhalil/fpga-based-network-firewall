@@ -20,7 +20,9 @@ always @(posedge clk or posedge rst) begin
         allow_dst_mac      <= 48'h000000000000;
         allow_src_mac      <= 48'h000000000000;
         allow_ethertype    <= 16'h0800;
-        min_frame_length   <= 16'd64;
+        // axis_gmii_rx strips the 4-byte FCS, so a minimum Ethernet frame
+        // appears as 60 bytes on the AXI stream instead of 64 bytes on wire.
+        min_frame_length   <= 16'd60;
         max_frame_length   <= 16'd1518;
         enforce_dst_mac    <= 1'b0;
         enforce_src_mac    <= 1'b0;

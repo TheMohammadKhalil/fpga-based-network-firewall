@@ -35,8 +35,9 @@ THE SOFTWARE.
  * via altpll, then hands off to fpga_core which implements the inline
  * Ethernet firewall.
  *
- * Inline firewall path:
- *   ENET0 (WAN/ingress) --> firewall pipeline --> ENET1 (LAN/egress)
+ * Inline firewall paths:
+ *   ENET0 --> firewall pipeline --> ENET1
+ *   ENET1 --> firewall pipeline --> ENET0
  *
  * Switch mapping (SW[3:0] control firewall rules):
  *   SW[0] = enforce destination MAC
@@ -45,9 +46,10 @@ THE SOFTWARE.
  *   SW[3] = drop frames with CRC errors
  *
  * LED mapping:
- *   LEDG[0] = packet allowed (pulse)
- *   LEDG[1] = packet dropped (pulse)
- *   LEDR    = SW mirror
+ *   LEDG[0]  = packet allowed pulse
+ *   LEDG[1]  = packet dropped pulse
+ *   LEDR[7:4] = packet dropped pulse bar
+ *   Other LEDs mirror switches / reset / heartbeat
  *
  * HEX displays:
  *   HEX7-4  = allowed packet count (16-bit hex)
