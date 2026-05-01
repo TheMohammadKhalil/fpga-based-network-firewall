@@ -1,0 +1,17 @@
+[dumpfile] "../firewall_tb.vcd"
+[savefile] "firewall_tb.gtkw"
+[timestart] 0
+[size] 1600 900
+[pos] -1 -1
+@28
+firewall_tb.s_axis_tvalid
+firewall_tb.s_axis_tlast
+firewall_tb.m_axis_tvalid
+firewall_tb.m_axis_tlast
+firewall_tb.packet_allowed
+firewall_tb.packet_dropped
+firewall_tb.allow_packet
+firewall_tb.crc_error
+@22
+firewall_tb.s_axis_tdata[7:0]
+firewall_tb.m_axis_tdata[7:0]

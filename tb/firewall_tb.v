@@ -35,16 +35,27 @@ reg m_axis_tready = 1;
 reg cfg_clk = 0;
 reg cfg_rst_n = 1;
 reg cfg_we = 0;
-reg [3:0] cfg_addr = 4'd0;
+reg [7:0] cfg_addr = 8'd0;
 reg [31:0] cfg_wdata = 32'd0;
 wire [31:0] cfg_rdata;
 
 // Status outputs
 wire packet_allowed;
 wire packet_dropped;
+wire allow_packet;
+wire crc_error;
 
 // CRC error (tied low for basic tests)
 reg crc_error_in = 0;
+
+assign allow_packet = dut.frame_allow_latched;
+assign crc_error = crc_error_in;
+
+// Waveform dump for Icarus/GTKWave documentation screenshots
+initial begin
+    $dumpfile("firewall_tb.vcd");
+    $dumpvars(0, firewall_tb);
+end
 
 // Clock generation
 always #((CLK_PERIOD/2)) clk = ~clk;
@@ -115,7 +126,7 @@ begin
     @(posedge cfg_clk);
 
     cfg_we = 0;
-    cfg_addr = 4'd0;
+    cfg_addr = 8'd0;
     cfg_wdata = 32'd0;
 end
 endtask
@@ -154,7 +165,7 @@ initial begin
         48'h001122334455,  // allow_dst
         48'h000000000000,  // allow_src (not enforced)
         16'h0800,          // allow_ethertype (IPv4)
-        16'd64,            // min_frame_length
+        16'd14,            // min_frame_length
         16'd1518,          // max_frame_length
         1'b1,              // enforce_dst_mac
         1'b0,              // enforce_src_mac
@@ -230,7 +241,7 @@ begin
 
     // Send destination MAC (6 bytes) - MSB first
     for (i = 0; i < 6; i = i + 1) begin
-        @(posedge clk);
+        @(negedge clk);
         s_axis_tdata = dst_mac_reg[47-(i*8) -: 8];
         s_axis_tvalid = 1;
         s_axis_tlast = 0;
@@ -238,7 +249,7 @@ begin
 
     // Send source MAC (6 bytes) - MSB first
     for (i = 0; i < 6; i = i + 1) begin
-        @(posedge clk);
+        @(negedge clk);
         s_axis_tdata = src_mac_reg[47-(i*8) -: 8];
         s_axis_tvalid = 1;
         s_axis_tlast = 0;
@@ -246,7 +257,7 @@ begin
 
     // Send ethertype (2 bytes) - MSB first
     for (i = 0; i < 2; i = i + 1) begin
-        @(posedge clk);
+        @(negedge clk);
         s_axis_tdata = ethertype_reg[15-(i*8) -: 8];
         s_axis_tvalid = 1;
         s_axis_tlast = 0;
@@ -254,14 +265,14 @@ begin
 
     // Send payload
     for (i = 0; i < payload_len_reg; i = i + 1) begin
-        @(posedge clk);
+        @(negedge clk);
         s_axis_tdata = (payload_reg >> (8*(payload_len_reg-1-i))) & 8'hFF;
         s_axis_tvalid = 1;
         s_axis_tlast = (i == payload_len_reg - 1);
     end
 
     // End of frame
-    @(posedge clk);
+    @(negedge clk);
     s_axis_tvalid = 0;
     s_axis_tlast = 0;
 end
@@ -286,7 +297,7 @@ initial begin
     s_axis_tvalid = 0;
     s_axis_tlast = 0;
     cfg_we = 0;
-    cfg_addr = 4'd0;
+    cfg_addr = 8'd0;
     cfg_wdata = 32'd0;
 end
 
