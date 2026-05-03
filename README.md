@@ -1,170 +1,236 @@
-# FPGA Ethernet Bridge / Firewall RTL
+# FPGA-Based Ethernet Bridge
 
-The current Quartus board build is a transparent two-port Ethernet bridge for
-the Terasic DE2-115. Connect the router LAN port to ENET0 and the PC/device to
-ENET1; the FPGA receives complete Ethernet frames with DE2-115-specific RGMII
-RX alignment and re-transmits them through the other MAC so the device can
-obtain normal router/internet access.
+This project currently builds a working transparent Ethernet bridge on the
+Terasic DE2-115 FPGA board. The board sits inline between a router LAN port and
+a laptop, forwards Ethernet frames in both directions, and lets the laptop gain
+network and internet access through the FPGA over a wired LAN cable.
 
-The original configurable firewall RTL and simulation testbench are still in
-the repository for development and reference, but the board-level `fpga` design
-now bypasses the firewall rules, switches, and HEX displays.
+The original firewall RTL is still kept in the repository for reference and
+future work, but the active Quartus board build now bypasses firewall rules,
+slide switches, and HEX displays. The current goal is reliable LAN pass-through.
 
-## Original Firewall RTL Features
+## Current Working Setup
 
-- **RGMII Interface**: Direct connection to Ethernet PHY chips
-- **Configurable Rules**: Filter by destination MAC, source MAC, ethertype, frame length
-- **CRC Error Detection**: Optionally drop frames with CRC errors
-- **AXI-Stream Interface**: Standard streaming interface for Ethernet frames
-- **Real-time Filtering**: Packets are filtered on-the-fly with minimal latency
+Tested cabling:
 
-## Architecture
-
-```
-                    +------------------+
-RGMII PHY <-------> |  Ethernet MAC    |
-                    |  (eth_mac_1g)    |
-                    +--------+---------+
-                             |
-                    AXI-Stream Interface
-                             |
-                    +--------v---------+
-                    |  Firewall Core   |
-                    |  +-------------+ |
-                    |  | Header      | |
-                    |  | Extractor   | |
-                    |  +------+------+ |
-                    |         |        |
-                    |  +------v--------+|
-                    |  | Context      ||
-                    |  | Store        ||
-                    |  +------+-------+|
-                    |         |        |
-                    |  +------v--------+|
-                    |  | Rule Match   ||
-                    |  +------+-------+|
-                    |         |        |
-                    |  +------v--------+|
-                    |  | TX Rebuild   ||
-                    |  +--------------+|
-                    +--------+---------+
-                             |
-                    +--------v---------+
-                    |  Ethernet MAC    |
-                    +--------+---------+
-                             |
-RGMII PHY <------------------+
+```text
+router LAN port -> FPGA ENET0
+laptop Ethernet -> FPGA ENET1
 ```
 
-## Firewall Rules
+Tested result:
 
-The firewall supports the following filtering criteria:
+- The laptop's Wi-Fi was disconnected.
+- The wired interface became active.
+- Internet access still worked through the LAN cable.
+- This confirms traffic was passing through the FPGA bridge.
 
-| Register | Address | Description |
-|----------|---------|-------------|
-| allow_dst_mac | 0x0-0x1 | Destination MAC to allow (48-bit) |
-| allow_src_mac | 0x2-0x3 | Source MAC to allow (48-bit) |
-| allow_ethertype | 0x4 | Ethertype to allow (16-bit) |
-| min_frame_length | 0x5 | Minimum frame length (16-bit) |
-| max_frame_length | 0x6 | Maximum frame length (16-bit) |
-| control | 0x7 | Control flags (enforce bits + drop_crc) |
+## What We Built
 
-### Control Register (0x7)
+The active top-level design is `rtl/fpga.v`, which instantiates
+`rtl/fpga_core.v`.
 
-| Bit | Name | Description |
-|-----|------|-------------|
-| 0 | enforce_dst_mac | Enable destination MAC filtering |
-| 1 | enforce_src_mac | Enable source MAC filtering |
-| 2 | enforce_ethertype | Enable ethertype filtering |
-| 3 | drop_crc_error | Drop frames with CRC errors |
+The bridge datapath is:
 
-## Files
+```text
+ENET0 PHY RX
+  -> DE2-115 RGMII RX aligner
+  -> AXI-Stream async FIFO
+  -> RGMII MAC transmitter
+  -> ENET1 PHY TX
 
-### Top-Level Modules
-- `rtl/firewall_rgmii_top.v` - Top-level wrapper with RGMII interface
-- `rtl/fpga_firewall_top.v` - Core firewall top module
+ENET1 PHY RX
+  -> DE2-115 RGMII RX aligner
+  -> AXI-Stream async FIFO
+  -> RGMII MAC transmitter
+  -> ENET0 PHY TX
+```
 
-### Firewall Components
-- `rtl/firewall_regs.v` - Configuration register bank
-- `rtl/eth_header_extract.v` - Extract Ethernet header from incoming frames
-- `rtl/header_context_store.v` - Store header context for frame processing
-- `rtl/firewall_rule_match.v` - Match frame against configured rules
-- `rtl/firewall_rx_parser.v` - Parse and buffer incoming frames
-- `rtl/firewall_tx_rebuild.v` - Rebuild frames with headers for transmission
-- `rtl/eth_header_insert.v` - Insert Ethernet headers on outgoing frames
-- `rtl/firewall_decision.v` - Allow/drop decision logic
+Important implementation details:
 
-### Ethernet MAC (verilog-ethernet)
-- `verilog-ethernet/rtl/eth_mac_1g.v` - 1G Ethernet MAC core
-- `verilog-ethernet/rtl/eth_mac_1g__rgmii.v` - RGMII wrapper
-- `verilog-ethernet/rtl/rgmii_phy_if.v` - RGMII PHY interface
-- `rtl/de2_rgmii_rx.v` - DE2-115 RGMII RX alignment wrapper
-- `verilog-ethernet/rtl/axis_gmii_rx.v` - GMII to AXI-Stream receiver
-- `verilog-ethernet/rtl/axis_gmii_tx.v` - AXI-Stream to GMII transmitter
+- Uses the DE2-115 Ethernet ports in RGMII mode.
+- Receives complete Ethernet frames on each port.
+- Checks/strips the incoming FCS on RX.
+- Re-generates the FCS on TX.
+- Uses async FIFOs to cross from each PHY RX clock domain into the opposite TX
+  clock domain.
+- Removes the old switch-controlled firewall path from the board build.
+- Removes HEX display outputs from the board build.
+- Uses LEDs for live link, traffic, and error bring-up.
 
-### Testbench
-- `tb/firewall_tb.v` - Simulation testbench
+## Main Source Files
 
-## Quartus Compilation
+Active board build:
 
-### Requirements
-- Intel/Altera Quartus Prime 18.1 or later
-- Cyclone V device (or update .qsf for your device)
+| File | Purpose |
+| --- | --- |
+| `rtl/fpga.v` | DE2-115 board top, PLL, reset, Ethernet pin wiring |
+| `rtl/fpga_core.v` | Transparent two-port Ethernet bridge |
+| `rtl/de2_rgmii_rx.v` | DE2-115 RGMII RX alignment and frame decode |
+| `rtl/axis_async_fifo.v` | Clock-domain crossing FIFO for Ethernet frames |
+| `rtl/sync_reset.v` | Reset synchronizer |
+| `verilog-ethernet/rtl/eth_mac_1g__rgmii.v` | RGMII MAC wrapper used for TX |
+| `verilog-ethernet/rtl/eth_mac_1g.v` | 1G Ethernet MAC core |
+| `verilog-ethernet/rtl/axis_gmii_rx.v` | GMII RX frame logic |
+| `verilog-ethernet/rtl/axis_gmii_tx.v` | GMII TX frame logic |
+| `verilog-ethernet/rtl/rgmii_phy_if.v` | RGMII PHY interface |
+| `verilog-ethernet/rtl/oddr.v` | DDR output wrapper |
+| `verilog-ethernet/rtl/ssio_ddr_in.v` | DDR input wrapper |
+| `verilog-ethernet/rtl/lfsr.v` | CRC/FCS support logic |
 
-### Steps
-1. Open Quartus Prime
-2. Open project: `fpga_firewall.qpf`
-3. Update pin assignments in `fpga_firewall.qsf` for your board
-4. Compile: Processing -> Start Compilation
-5. Program device with generated `.sof` file
+Project files:
 
-### Pin Assignments
-Update the pin assignments in `fpga_firewall.qsf` to match your specific FPGA board. The default assignments are placeholders.
+| File | Purpose |
+| --- | --- |
+| `fpga_firewall.qpf` | Quartus project file |
+| `fpga_firewall.qsf` | Device, source, and pin assignments |
+| `fpga.sdc` | Timing constraints |
+| `docs/fpga_lan_bringup.md` | Bring-up and debugging checklist |
 
-## Simulation
+Reference firewall RTL, not active in the current board build:
 
-### Using Icarus Verilog
+- `rtl/fpga_firewall_top.v`
+- `rtl/firewall_regs.v`
+- `rtl/firewall_rule_match.v`
+- `rtl/firewall_l3_rule_match.v`
+- `rtl/firewall_rule_table.v`
+- `rtl/firewall_rx_parser.v`
+- `rtl/firewall_tx_rebuild.v`
+- `rtl/firewall_decision.v`
+- `rtl/eth_header_extract.v`
+- `rtl/eth_header_insert.v`
+- `rtl/ip_header_extract.v`
+- `rtl/tcp_udp_header_extract.v`
+- `rtl/header_context_store.v`
+
+## LED Map
+
+During normal bridge operation:
+
+```text
+LEDG0 blink  raw traffic entering ENET0
+LEDG1 blink  raw traffic entering ENET1
+LEDG2 blink  valid frame transmitted ENET0 -> ENET1
+LEDG3 blink  valid frame transmitted ENET1 -> ENET0
+LEDG4 blink  ENET0 RX bad frame/FCS
+LEDG5 blink  ENET1 RX bad frame/FCS
+LEDG6 blink  valid received frame decoded
+LEDG7 on     bridge out of reset
+LEDG8 blink  heartbeat
+```
+
+For the normal cable setup:
+
+```text
+laptop -> router traffic should blink LEDG1 and LEDG3
+router -> laptop traffic should blink LEDG0 and LEDG2
+LEDG6 should blink when valid frames are decoded
+LEDG4 and LEDG5 should normally stay off
+```
+
+Red LEDs show detected speed:
+
+```text
+ENET0: LEDR1 on              1000 Mb/s
+ENET0: LEDR0 on, LEDR1 off   100 Mb/s
+ENET1: LEDR3 on              1000 Mb/s
+ENET1: LEDR2 on, LEDR3 off   100 Mb/s
+```
+
+## Hardware Requirements
+
+- Terasic DE2-115 board
+- Cyclone IV E device: `EP4CE115F29C7`
+- Two Ethernet cables
+- Router with an available LAN port
+- Laptop or PC with Ethernet
+
+Make sure the DE2-115 Ethernet jumpers are configured for RGMII mode. On the
+DE2-115, `JP1` and `JP2` should be set to RGMII mode for the Ethernet PHYs.
+
+## Build And Program
+
+1. Open `fpga_firewall.qpf` in Quartus.
+2. Run `Processing -> Start Compilation`.
+3. Program the DE2-115 with the generated `.sof`.
+4. Do not hold `KEY[3]`, because it resets the PLL.
+5. After programming, `LEDG7` should be on and `LEDG8` should blink.
+
+## Ubuntu Bring-Up
+
+Create a clean wired connection profile:
+
 ```bash
-iverilog -o firewall_tb \
-    rtl/*.v \
-    verilog-ethernet/rtl/*.v \
-    lib/axis/rtl/*.v \
-    tb/firewall_tb.v
-
-vvp firewall_tb
+nmcli device disconnect wlp8s0
+nmcli connection delete fpga-lan
+nmcli connection add type ethernet ifname enp7s0 con-name fpga-lan ipv4.method auto ipv6.method ignore
+sudo ip addr flush dev enp7s0
+nmcli connection up fpga-lan
 ```
 
-### Using ModelSim
+Verify that the laptop is using the wired connection:
+
 ```bash
-vlog rtl/*.v verilog-ethernet/rtl/*.v lib/axis/rtl/*.v tb/firewall_tb.v
-vsim firewall_tb
-run 1000ns
+ip -4 addr show enp7s0
+ip route get 8.8.8.8
+nmcli device status
 ```
 
-## Configuration Example
+A working route should show `dev enp7s0` for internet traffic.
 
-To allow frames from a specific MAC address:
+Test internet access through the FPGA:
 
-```verilog
-// Write to configuration registers (AXI-lite style)
-cfg_we = 1;
-cfg_addr = 4'h0;  // allow_dst_mac[31:0]
-cfg_wdata = 32'h33445566;
-// ... continue for all registers
+```bash
+ping -I enp7s0 -c 4 192.168.1.1
+ping -I enp7s0 -c 4 8.8.8.8
+ping -I enp7s0 -c 4 google.com
 ```
 
-## Status Outputs
+Useful packet capture during DHCP/debug:
 
-| Signal | Description |
-|--------|-------------|
-| packet_allowed | Pulse when a packet passes the firewall |
-| packet_dropped | Pulse when a packet is dropped |
-| speed[1:0] | Link speed (00=10M, 01=100M, 10=1G) |
-| link_up | Link status indicator |
+```bash
+sudo tcpdump -i enp7s0 -n -e 'arp or port 67 or port 68'
+```
+
+## What Was Removed From The Active Board Build
+
+The following user-facing hardware controls are no longer part of the active
+Quartus top-level design:
+
+- Slide switches
+- HEX seven-segment displays
+- Switch-controlled firewall rule selection
+
+The board now focuses only on forwarding Ethernet traffic so the laptop can use
+the router through the FPGA.
+
+## Current Project Status
+
+Working:
+
+- FPGA programs successfully in Quartus.
+- Ethernet link comes up on the laptop.
+- Traffic is visible through the FPGA.
+- Internet access works with Wi-Fi disabled.
+- The board behaves as a transparent LAN bridge.
+
+Still available for future development:
+
+- Firewall parser and rule-table RTL.
+- Simulation/testbench material.
+- Packet capture documentation scripts.
+
+Future work:
+
+- Re-introduce firewall filtering after the bridge path is stable.
+- Add a clean configuration interface that does not depend on board switches.
+- Add automated hardware bring-up notes and captures for demonstration.
 
 ## License
 
-The Ethernet MAC and related components are from the [verilog-ethernet](https://github.com/alexforencich/verilog-ethernet) project by Alex Forencich (MIT License).
+The Ethernet MAC and related components are from the
+[verilog-ethernet](https://github.com/alexforencich/verilog-ethernet) project
+by Alex Forencich and are licensed under the MIT License.
 
-The firewall core is original work.
-# fpga-based-network-firewall
+The firewall and board integration RTL in this repository is project work built
+around that Ethernet core.
