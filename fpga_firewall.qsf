@@ -1,4 +1,4 @@
-# Quartus Settings File — FPGA Firewall
+# Quartus Settings File - FPGA Ethernet Bridge
 # Target board : Terasic DE2-115
 # Device       : EP4CE115F29C7  (Cyclone IV E)
 
@@ -34,40 +34,20 @@ set_global_assignment -name SDC_FILE fpga.sdc
 set_global_assignment -name VERILOG_FILE rtl/fpga.v
 set_global_assignment -name VERILOG_FILE rtl/fpga_core.v
 
-# Utility modules (sync reset, debounce)
+# Utility modules
 set_global_assignment -name VERILOG_FILE rtl/sync_reset.v
-set_global_assignment -name VERILOG_FILE rtl/debounce_switch.v
 set_global_assignment -name VERILOG_FILE rtl/axis_async_fifo.v
 set_global_assignment -name VERILOG_FILE rtl/de2_rgmii_rx.v
 
-# Firewall pipeline
-set_global_assignment -name VERILOG_FILE rtl/fpga_firewall_top.v
-set_global_assignment -name VERILOG_FILE rtl/ip_header_extract.v
-set_global_assignment -name VERILOG_FILE rtl/tcp_udp_header_extract.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_rule_table.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_l3_rule_match.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_regs.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_rx_parser.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_tx_rebuild.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_decision.v
-set_global_assignment -name VERILOG_FILE rtl/firewall_rule_match.v
-set_global_assignment -name VERILOG_FILE rtl/eth_header_insert.v
-set_global_assignment -name VERILOG_FILE rtl/eth_header_extract.v
-set_global_assignment -name VERILOG_FILE rtl/header_context_store.v
-
-# Ethernet MAC (verilog-ethernet)
+# 1G RGMII MAC bridge
 set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/eth_mac_1g__rgmii.v"
-set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/eth_mac_1g.v"
 set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/rgmii_phy_if.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/ssio_ddr_in.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/oddr.v"
+set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/eth_mac_1g.v"
 set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/axis_gmii_rx.v"
 set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/axis_gmii_tx.v"
-set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/oddr.v"
-set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/ssio_ddr_in.v"
 set_global_assignment -name VERILOG_FILE "verilog-ethernet/rtl/lfsr.v"
-
-# AXI-Stream library
-set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_fifo.v
-set_global_assignment -name VERILOG_FILE lib/axis/rtl/axis_register.v
 
 # =============================================================================
 # Pin assignments — Terasic DE2-115
@@ -91,46 +71,6 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to KEY[0]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to KEY[1]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to KEY[2]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to KEY[3]
-
-#============================================================
-# Slide switches SW[17:0]
-#============================================================
-set_location_assignment PIN_AB28 -to SW[0]
-set_location_assignment PIN_AC28 -to SW[1]
-set_location_assignment PIN_AC27 -to SW[2]
-set_location_assignment PIN_AD27 -to SW[3]
-set_location_assignment PIN_AB27 -to SW[4]
-set_location_assignment PIN_AC26 -to SW[5]
-set_location_assignment PIN_AD26 -to SW[6]
-set_location_assignment PIN_AB26 -to SW[7]
-set_location_assignment PIN_AC25 -to SW[8]
-set_location_assignment PIN_AB25 -to SW[9]
-set_location_assignment PIN_AC24 -to SW[10]
-set_location_assignment PIN_AB24 -to SW[11]
-set_location_assignment PIN_AB23 -to SW[12]
-set_location_assignment PIN_AA24 -to SW[13]
-set_location_assignment PIN_AA23 -to SW[14]
-set_location_assignment PIN_AA22 -to SW[15]
-set_location_assignment PIN_Y24 -to SW[16]
-set_location_assignment PIN_Y23 -to SW[17]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[7]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[8]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[9]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[10]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[11]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[12]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[13]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[14]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[15]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[16]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to SW[17]
 
 #============================================================
 # Green LEDs LEDG[8:0]
@@ -195,131 +135,7 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to LEDR[16]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to LEDR[17]
 
 #============================================================
-# 7-segment displays HEX0-7
-#============================================================
-set_location_assignment PIN_G18 -to HEX0[0]
-set_location_assignment PIN_F22 -to HEX0[1]
-set_location_assignment PIN_E17 -to HEX0[2]
-set_location_assignment PIN_L26 -to HEX0[3]
-set_location_assignment PIN_L25 -to HEX0[4]
-set_location_assignment PIN_J22 -to HEX0[5]
-set_location_assignment PIN_H22 -to HEX0[6]
-
-set_location_assignment PIN_M24 -to HEX1[0]
-set_location_assignment PIN_Y22 -to HEX1[1]
-set_location_assignment PIN_W21 -to HEX1[2]
-set_location_assignment PIN_W22 -to HEX1[3]
-set_location_assignment PIN_W25 -to HEX1[4]
-set_location_assignment PIN_U23 -to HEX1[5]
-set_location_assignment PIN_U24 -to HEX1[6]
-
-set_location_assignment PIN_AA25 -to HEX2[0]
-set_location_assignment PIN_AA26 -to HEX2[1]
-set_location_assignment PIN_Y25 -to HEX2[2]
-set_location_assignment PIN_W26 -to HEX2[3]
-set_location_assignment PIN_Y26 -to HEX2[4]
-set_location_assignment PIN_W27 -to HEX2[5]
-set_location_assignment PIN_W28 -to HEX2[6]
-
-set_location_assignment PIN_V21 -to HEX3[0]
-set_location_assignment PIN_U21 -to HEX3[1]
-set_location_assignment PIN_AB20 -to HEX3[2]
-set_location_assignment PIN_AA21 -to HEX3[3]
-set_location_assignment PIN_AD24 -to HEX3[4]
-set_location_assignment PIN_AF23 -to HEX3[5]
-set_location_assignment PIN_Y19 -to HEX3[6]
-
-set_location_assignment PIN_AB19 -to HEX4[0]
-set_location_assignment PIN_AA19 -to HEX4[1]
-set_location_assignment PIN_AG21 -to HEX4[2]
-set_location_assignment PIN_AH21 -to HEX4[3]
-set_location_assignment PIN_AE19 -to HEX4[4]
-set_location_assignment PIN_AF19 -to HEX4[5]
-set_location_assignment PIN_AE18 -to HEX4[6]
-
-set_location_assignment PIN_AD18 -to HEX5[0]
-set_location_assignment PIN_AC18 -to HEX5[1]
-set_location_assignment PIN_AB18 -to HEX5[2]
-set_location_assignment PIN_AH19 -to HEX5[3]
-set_location_assignment PIN_AG19 -to HEX5[4]
-set_location_assignment PIN_AF18 -to HEX5[5]
-set_location_assignment PIN_AH18 -to HEX5[6]
-
-set_location_assignment PIN_AA17 -to HEX6[0]
-set_location_assignment PIN_AB16 -to HEX6[1]
-set_location_assignment PIN_AA16 -to HEX6[2]
-set_location_assignment PIN_AB17 -to HEX6[3]
-set_location_assignment PIN_AB15 -to HEX6[4]
-set_location_assignment PIN_AA15 -to HEX6[5]
-set_location_assignment PIN_AC17 -to HEX6[6]
-
-set_location_assignment PIN_AD17 -to HEX7[0]
-set_location_assignment PIN_AE17 -to HEX7[1]
-set_location_assignment PIN_AG17 -to HEX7[2]
-set_location_assignment PIN_AH17 -to HEX7[3]
-set_location_assignment PIN_AF17 -to HEX7[4]
-set_location_assignment PIN_AG18 -to HEX7[5]
-set_location_assignment PIN_AA14 -to HEX7[6]
-
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX0[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX1[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX2[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX3[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX4[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX5[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX6[6]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[0]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[1]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[2]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[3]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[4]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[5]
-set_instance_assignment -name IO_STANDARD "2.5 V" -to HEX7[6]
-
-#============================================================
-# Ethernet ENET0  (ingress / WAN side)
+# Ethernet ENET0  (bridge port A)
 # DE2-115 official Ethernet pins from the Terasic user manual.
 # The board ships with the PHYs in RGMII mode by default; in that mode
 # ENET*_RX_DV is used as RX_CTL and ENET*_TX_EN is used as TX_CTL.
@@ -355,7 +171,7 @@ set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_TX_DATA[3]
 set_instance_assignment -name IO_STANDARD "2.5 V" -to ENET0_TX_EN
 
 #============================================================
-# Ethernet ENET1  (egress / LAN side)
+# Ethernet ENET1  (bridge port B)
 #============================================================
 set_location_assignment PIN_C23 -to ENET1_GTX_CLK
 set_location_assignment PIN_D24 -to ENET1_INT_N
@@ -391,7 +207,6 @@ set_global_assignment -name LAST_QUARTUS_VERSION "24.1std.0 Lite Edition"
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
-
 
 
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

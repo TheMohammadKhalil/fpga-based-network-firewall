@@ -1,4 +1,4 @@
-# Timing constraints for FPGA Firewall — Terasic DE2-115
+# Timing constraints for FPGA Ethernet Bridge - Terasic DE2-115
 # Based on Alex Forencich's verilog-ethernet DE2-115 example SDC
 
 # -----------------------------------------------------------------------------
@@ -23,17 +23,8 @@ set_output_delay -clock altera_reserved_tck -clock_fall -fall -max 5 \
 # False paths — human-interface signals
 # -----------------------------------------------------------------------------
 set_false_path -from [get_ports {KEY[*]}]  -to *
-set_false_path -from [get_ports {SW[*]}]   -to *
 set_false_path -from * -to [get_ports {LEDG[*]}]
 set_false_path -from * -to [get_ports {LEDR[*]}]
-set_false_path -from * -to [get_ports {HEX0[*]}]
-set_false_path -from * -to [get_ports {HEX1[*]}]
-set_false_path -from * -to [get_ports {HEX2[*]}]
-set_false_path -from * -to [get_ports {HEX3[*]}]
-set_false_path -from * -to [get_ports {HEX4[*]}]
-set_false_path -from * -to [get_ports {HEX5[*]}]
-set_false_path -from * -to [get_ports {HEX6[*]}]
-set_false_path -from * -to [get_ports {HEX7[*]}]
 
 # -----------------------------------------------------------------------------
 # False paths — Ethernet reset and interrupt
@@ -65,19 +56,6 @@ set_input_delay -clock ENET0_RX_CLK -clock_fall -min -0.5 \
                 [get_ports {ENET0_RX_DATA[*] ENET0_RX_DV}] -add_delay
 
 # -----------------------------------------------------------------------------
-# RGMII output timing — ENET0
-# ENET0 TX is tied off in this design, but constrain for clean compilation
-# -----------------------------------------------------------------------------
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -max  1.0 \
-                 [get_ports {ENET0_TX_DATA[*] ENET0_TX_EN}]
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -min -0.5 \
-                 [get_ports {ENET0_TX_DATA[*] ENET0_TX_EN}]
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -clock_fall -max  1.0 \
-                 [get_ports {ENET0_TX_DATA[*] ENET0_TX_EN}] -add_delay
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -clock_fall -min -0.5 \
-                 [get_ports {ENET0_TX_DATA[*] ENET0_TX_EN}] -add_delay
-
-# -----------------------------------------------------------------------------
 # RGMII input timing — ENET1
 # -----------------------------------------------------------------------------
 create_clock -period 8.000 -name {ENET1_RX_CLK} [get_ports {ENET1_RX_CLK}]
@@ -89,18 +67,6 @@ set_input_delay -clock ENET1_RX_CLK -clock_fall -max  1.5 \
                 [get_ports {ENET1_RX_DATA[*] ENET1_RX_DV}] -add_delay
 set_input_delay -clock ENET1_RX_CLK -clock_fall -min -0.5 \
                 [get_ports {ENET1_RX_DATA[*] ENET1_RX_DV}] -add_delay
-
-# -----------------------------------------------------------------------------
-# RGMII output timing — ENET1
-# -----------------------------------------------------------------------------
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -max  1.0 \
-                 [get_ports {ENET1_TX_DATA[*] ENET1_TX_EN}]
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -min -0.5 \
-                 [get_ports {ENET1_TX_DATA[*] ENET1_TX_EN}]
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -clock_fall -max  1.0 \
-                 [get_ports {ENET1_TX_DATA[*] ENET1_TX_EN}] -add_delay
-set_output_delay -clock {altpll_component|auto_generated|pll1|clk[0]} -clock_fall -min -0.5 \
-                 [get_ports {ENET1_TX_DATA[*] ENET1_TX_EN}] -add_delay
 
 # GTX clock outputs to PHY
 set_false_path -from * -to [get_ports {ENET0_GTX_CLK}]

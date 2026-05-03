@@ -65,8 +65,8 @@ if (TARGET == "ALTERA") begin : altera_odd
         oddr_inst (
             .dataout(q_wire),
             .outclock(clk),
-            .datain_h(d2),
-            .datain_l(d1),
+            .datain_h(d1),
+            .datain_l(d2),
             .aclr(1'b0),
             .aset(1'b0),
             .oe(1'b1),
@@ -86,8 +86,8 @@ if (TARGET == "ALTERA") begin : altera_odd
             oddr_inst (
                 .dataout(q_wire[i]),
                 .outclock(clk),
-                .datain_h(d2[i]),
-                .datain_l(d1[i]),
+                .datain_h(d1[i]),
+                .datain_l(d2[i]),
                 .aclr(1'b0),
                 .aset(1'b0),
                 .oe(1'b1),

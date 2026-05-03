@@ -1,8 +1,16 @@
-# FPGA Firewall - Ethernet Frame Filter
+# FPGA Ethernet Bridge / Firewall RTL
 
-An FPGA-based network firewall that filters Ethernet frames based on configurable rules.
+The current Quartus board build is a transparent two-port Ethernet bridge for
+the Terasic DE2-115. Connect the router LAN port to ENET0 and the PC/device to
+ENET1; the FPGA receives complete Ethernet frames with DE2-115-specific RGMII
+RX alignment and re-transmits them through the other MAC so the device can
+obtain normal router/internet access.
 
-## Features
+The original configurable firewall RTL and simulation testbench are still in
+the repository for development and reference, but the board-level `fpga` design
+now bypasses the firewall rules, switches, and HEX displays.
+
+## Original Firewall RTL Features
 
 - **RGMII Interface**: Direct connection to Ethernet PHY chips
 - **Configurable Rules**: Filter by destination MAC, source MAC, ethertype, frame length
@@ -88,8 +96,9 @@ The firewall supports the following filtering criteria:
 
 ### Ethernet MAC (verilog-ethernet)
 - `verilog-ethernet/rtl/eth_mac_1g.v` - 1G Ethernet MAC core
-- `verilog-ethernet/rtl/eth_mac_1g_rgmii.v` - RGMII wrapper
+- `verilog-ethernet/rtl/eth_mac_1g__rgmii.v` - RGMII wrapper
 - `verilog-ethernet/rtl/rgmii_phy_if.v` - RGMII PHY interface
+- `rtl/de2_rgmii_rx.v` - DE2-115 RGMII RX alignment wrapper
 - `verilog-ethernet/rtl/axis_gmii_rx.v` - GMII to AXI-Stream receiver
 - `verilog-ethernet/rtl/axis_gmii_tx.v` - AXI-Stream to GMII transmitter
 

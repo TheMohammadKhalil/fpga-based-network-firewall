@@ -1,4 +1,4 @@
-# Quartus Project File — FPGA Firewall
+# Quartus Project File - FPGA Ethernet Bridge
 # Target board : Terasic DE2-115 (Cyclone IV E EP4CE115F29C7)
 
 PROJECT_REVISION = "fpga_firewall"

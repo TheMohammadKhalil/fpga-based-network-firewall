@@ -33,27 +33,22 @@ THE SOFTWARE.
  *
  * Generates 125 MHz + 90-degree clocks from the 50 MHz board oscillator
  * via altpll, then hands off to fpga_core which implements the inline
- * Ethernet firewall.
+ * two-MAC Ethernet bridge.
  *
- * Inline firewall paths:
- *   ENET0 --> firewall pipeline --> ENET1
- *   ENET1 --> firewall pipeline --> ENET0
- *
- * Switch mapping (SW[3:0] control firewall rules):
- *   SW[0] = enforce destination MAC
- *   SW[1] = enforce source MAC
- *   SW[2] = enforce EtherType
- *   SW[3] = drop frames with CRC errors
+ * Inline bridge paths:
+ *   ENET0 --> ENET1
+ *   ENET1 --> ENET0
  *
  * LED mapping:
- *   LEDG[0]  = packet allowed pulse
- *   LEDG[1]  = packet dropped pulse
- *   LEDR[7:4] = packet dropped pulse bar
- *   Other LEDs mirror switches / reset / heartbeat
- *
- * HEX displays:
- *   HEX7-4  = allowed packet count (16-bit hex)
- *   HEX3-0  = dropped packet count (16-bit hex)
+ *   LEDG[0]  = raw ENET0 RX activity
+ *   LEDG[1]  = raw ENET1 RX activity
+ *   LEDG[2]  = frame transmitted ENET0 -> ENET1
+ *   LEDG[3]  = frame transmitted ENET1 -> ENET0
+ *   LEDG[4]  = ENET0 RX bad frame/FCS
+ *   LEDG[5]  = ENET1 RX bad frame/FCS
+ *   LEDG[6]  = any good MAC RX frame
+ *   LEDG[7]  = bridge out of reset
+ *   LEDG[8]  = heartbeat
  */
 module fpga (
     /*
@@ -65,20 +60,11 @@ module fpga (
      * GPIO
      */
     input  wire [3:0]  KEY,
-    input  wire [17:0] SW,
     output wire [8:0]  LEDG,
     output wire [17:0] LEDR,
-    output wire [6:0]  HEX0,
-    output wire [6:0]  HEX1,
-    output wire [6:0]  HEX2,
-    output wire [6:0]  HEX3,
-    output wire [6:0]  HEX4,
-    output wire [6:0]  HEX5,
-    output wire [6:0]  HEX6,
-    output wire [6:0]  HEX7,
 
     /*
-     * Ethernet: 1000BASE-T RGMII (ENET0 = ingress / WAN side)
+     * Ethernet: 1000BASE-T RGMII (ENET0 = bridge port A)
      */
     output wire        ENET0_GTX_CLK,
     output wire [3:0]  ENET0_TX_DATA,
@@ -90,7 +76,7 @@ module fpga (
     input  wire        ENET0_INT_N,
 
     /*
-     * Ethernet: 1000BASE-T RGMII (ENET1 = egress / LAN side)
+     * Ethernet: 1000BASE-T RGMII (ENET1 = bridge port B)
      */
     output wire        ENET1_GTX_CLK,
     output wire [3:0]  ENET1_TX_DATA,
@@ -108,6 +94,7 @@ module fpga (
 wire clk_int;
 wire clk90_int;
 wire rst_int;
+wire [4:0] pll_clk;
 
 wire pll_rst    = ~KEY[3];   // KEY[3] pressed (active low) = PLL reset
 wire pll_locked;
@@ -174,7 +161,7 @@ altpll #(
 altpll_component (
     .areset(pll_rst),
     .inclk({1'b0, CLOCK_50}),
-    .clk({clk90_int, clk_int}),
+    .clk(pll_clk),
     .locked(pll_locked),
     .activeclock(),
     .clkbad(),
@@ -211,30 +198,15 @@ altpll_component (
     .vcounderrange()
 );
 
+assign clk_int = pll_clk[0];
+assign clk90_int = pll_clk[1];
+
 // Synchronise reset into the 125 MHz domain
 sync_reset #(.N(4))
 sync_reset_inst (
     .clk(clk_int),
     .rst(~pll_locked),
     .out(rst_int)
-);
-
-// ---------------------------------------------------------------------------
-// GPIO debounce
-// ---------------------------------------------------------------------------
-wire [3:0]  btn_int;
-wire [17:0] sw_int;
-
-debounce_switch #(
-    .WIDTH(4 + 18),
-    .N(4),
-    .RATE(125000)
-)
-debounce_switch_inst (
-    .clk(clk_int),
-    .rst(rst_int),
-    .in({~KEY, SW}),
-    .out({btn_int, sw_int})
 );
 
 // ---------------------------------------------------------------------------
@@ -246,20 +218,10 @@ core_inst (
     .clk90(clk90_int),
     .rst(rst_int),
 
-    .btn(btn_int),
-    .sw(sw_int),
     .ledg(LEDG),
     .ledr(LEDR),
-    .hex0(HEX0),
-    .hex1(HEX1),
-    .hex2(HEX2),
-    .hex3(HEX3),
-    .hex4(HEX4),
-    .hex5(HEX5),
-    .hex6(HEX6),
-    .hex7(HEX7),
 
-    // ENET0 — ingress (WAN)
+    // ENET0 - bridge port A
     .phy0_rx_clk(ENET0_RX_CLK),
     .phy0_rxd(ENET0_RX_DATA),
     .phy0_rx_ctl(ENET0_RX_DV),
@@ -269,7 +231,7 @@ core_inst (
     .phy0_reset_n(ENET0_RST_N),
     .phy0_int_n(ENET0_INT_N),
 
-    // ENET1 — egress (LAN)
+    // ENET1 - bridge port B
     .phy1_rx_clk(ENET1_RX_CLK),
     .phy1_rxd(ENET1_RX_DATA),
     .phy1_rx_ctl(ENET1_RX_DV),
