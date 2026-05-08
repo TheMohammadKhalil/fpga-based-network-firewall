@@ -4,27 +4,53 @@ This document shows how the active FPGA bridge code works. It focuses on the
 current working board build, not the older firewall modules that remain in the
 repository for reference.
 
-## Top-Level System Flow
+Important hardware note: the active Verilog instantiates two mirrored forwarding
+paths, but the latest board test did not behave as a fully bidirectional bridge.
+With the normal cabling, router traffic reached the laptop, but laptop traffic
+did not reach the router. The diagrams below therefore separate the intended
+code structure from the currently observed hardware behavior.
+
+## Observed Hardware Flow
 
 ```mermaid
 flowchart LR
     ROUTER[Router LAN port]
     LAPTOP[Laptop Ethernet port]
 
-    subgraph FPGA["DE2-115 FPGA Transparent Ethernet Bridge"]
+    subgraph FPGA["DE2-115 FPGA board"]
+        ENET0[ENET0 PHY<br/>router-side port]
+        ENET1[ENET1 PHY<br/>laptop-side port]
+        CORE[fpga_core<br/>active bridge code]
+    end
+
+    ROUTER --> ENET0 --> CORE --> ENET1 --> LAPTOP
+    LAPTOP -. not working in latest test .-> ENET1
+    ENET1 -. intended reverse path in code .-> CORE
+    CORE -. not observed reaching router .-> ENET0
+    ENET0 -. blocked or failing direction .-> ROUTER
+```
+
+## Implemented Code Structure
+
+```mermaid
+flowchart LR
+    ROUTER[Router LAN port]
+    LAPTOP[Laptop Ethernet port]
+
+    subgraph FPGA["DE2-115 FPGA Transparent Ethernet Bridge Code"]
         ENET0[ENET0 PHY<br/>RGMII RX/TX pins]
         ENET1[ENET1 PHY<br/>RGMII RX/TX pins]
 
-        subgraph PATH01["Forward path A: ENET0 RX to ENET1 TX"]
+        subgraph PATH01["Path implemented in code: ENET0 RX to ENET1 TX"]
             RX0[de2_rgmii_rx<br/>Decode ENET0 RGMII RX]
-            FIFO01[axis_async_fifo<br/>ENET0 RX clock to ENET1 TX clock]
+            FIFO01[axis_async_fifo<br/>fifo_0_to_1_inst]
             TX1[eth_mac_1g_rgmii TX<br/>Transmit on ENET1<br/>Add preamble and FCS]
             RX0 --> FIFO01 --> TX1
         end
 
-        subgraph PATH10["Forward path B: ENET1 RX to ENET0 TX"]
+        subgraph PATH10["Path implemented in code: ENET1 RX to ENET0 TX"]
             RX1[de2_rgmii_rx<br/>Decode ENET1 RGMII RX]
-            FIFO10[axis_async_fifo<br/>ENET1 RX clock to ENET0 TX clock]
+            FIFO10[axis_async_fifo<br/>fifo_1_to_0_inst]
             TX0[eth_mac_1g_rgmii TX<br/>Transmit on ENET0<br/>Add preamble and FCS]
             RX1 --> FIFO10 --> TX0
         end
@@ -73,15 +99,16 @@ flowchart TD
     PHYRESET --> ENET1RST[ENET1_RST_N]
 ```
 
-## Bidirectional Frame Flow
+## Intended Bidirectional Frame Flow In Code
 
-The bridge is bidirectional because it contains two mirrored one-way hardware
-paths. Each path receives from one Ethernet PHY and transmits from the opposite
-PHY.
+The active Verilog contains two mirrored one-way hardware paths. The first path
+has been observed working in the latest test. The second path exists in the code
+but is the path to debug because laptop-to-router traffic is not reaching the
+router.
 
 ```mermaid
 flowchart LR
-    subgraph DIR01["Direction A: Router side to Laptop side"]
+    subgraph DIR01["Direction A: router side to laptop side - observed working"]
         P0RX[ENET0 RX pins<br/>RX_CLK, RX_DATA, RX_DV]
         D0[de2_rgmii_rx<br/>RGMII DDR sample and align]
         G0[axis_gmii_rx<br/>Find preamble/SFD<br/>Check/remove FCS]
@@ -93,7 +120,7 @@ flowchart LR
         P0RX --> D0 --> G0 --> S0 --> F01 --> T1 --> P1TX
     end
 
-    subgraph DIR10["Direction B: Laptop side to Router side"]
+    subgraph DIR10["Direction B: laptop side to router side - failing in latest test"]
         P1RX[ENET1 RX pins<br/>RX_CLK, RX_DATA, RX_DV]
         D1[de2_rgmii_rx<br/>RGMII DDR sample and align]
         G1[axis_gmii_rx<br/>Find preamble/SFD<br/>Check/remove FCS]
@@ -108,7 +135,8 @@ flowchart LR
 
 ## Runtime Packet Sequence
 
-This is what happens when the laptop gets internet access through the FPGA.
+This is the latest observed behavior with the normal cabling:
+router on ENET0 and laptop on ENET1.
 
 ```mermaid
 sequenceDiagram
@@ -118,17 +146,16 @@ sequenceDiagram
     participant ENET0 as FPGA ENET0
     participant Router
 
-    Laptop->>ENET1: Ethernet frame, e.g. DHCP/ARP/IP
-    ENET1->>Core: ENET1 RX decoded to AXI-Stream bytes
-    Core->>Core: FIFO10 crosses to ENET0 TX clock
-    Core->>ENET0: ENET0 TX MAC adds preamble/FCS
-    ENET0->>Router: Same frame contents forwarded
-
     Router->>ENET0: Ethernet frame, e.g. DHCP reply/ARP/IP
     ENET0->>Core: ENET0 RX decoded to AXI-Stream bytes
     Core->>Core: FIFO01 crosses to ENET1 TX clock
     Core->>ENET1: ENET1 TX MAC adds preamble/FCS
     ENET1->>Laptop: Same frame contents forwarded
+
+    Laptop--xENET1: Ethernet frame, e.g. DHCP/ARP/IP
+    ENET1--xCore: ENET1 to ENET0 path is present in code
+    Core--xENET0: But latest hardware test did not reach router
+    ENET0--xRouter: Reverse direction remains under debug
 ```
 
 ## LED Debug Flow
@@ -172,12 +199,12 @@ flowchart LR
 
 ## Short Explanation For Documentation
 
-The FPGA is configured as an inline transparent Ethernet bridge. It is
-bidirectional because `fpga_core.v` instantiates two mirrored forwarding paths:
-ENET0 RX goes through `fifo_0_to_1_inst` to ENET1 TX, and ENET1 RX goes through
-`fifo_1_to_0_inst` to ENET0 TX. In each direction, the receive logic samples
-RGMII data, aligns nibbles into bytes, checks/removes the incoming FCS, and
-emits AXI-Stream frame bytes. The async FIFO crosses into the opposite transmit
-clock domain. The transmit MAC adds preamble, pads if required, regenerates FCS,
-and drives the opposite RGMII PHY. The frame contents are forwarded as a byte
-stream; the active bridge does not parse or filter MAC/IP/TCP/UDP fields.
+The active Verilog is intended to implement an inline transparent Ethernet
+bridge. `fpga_core.v` instantiates two mirrored forwarding paths: ENET0 RX goes
+through `fifo_0_to_1_inst` to ENET1 TX, and ENET1 RX goes through
+`fifo_1_to_0_inst` to ENET0 TX. In the latest hardware test, only the
+router-side to laptop-side direction was confirmed working. The laptop-side to
+router-side direction is present in the code but did not reach the router and
+must be debugged as the `ENET1 RX -> fifo_1_to_0_inst -> ENET0 TX` path. The
+frame contents are forwarded as a byte stream; the active bridge does not parse
+or filter MAC/IP/TCP/UDP fields.
