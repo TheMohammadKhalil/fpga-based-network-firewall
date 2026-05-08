@@ -11,25 +11,32 @@ flowchart LR
     ROUTER[Router LAN port]
     LAPTOP[Laptop Ethernet port]
 
-    subgraph FPGA["DE2-115 FPGA Ethernet Bridge"]
-        ENET0[ENET0 PHY / RGMII pins]
-        ENET1[ENET1 PHY / RGMII pins]
+    subgraph FPGA["DE2-115 FPGA Transparent Ethernet Bridge"]
+        ENET0[ENET0 PHY<br/>RGMII RX/TX pins]
+        ENET1[ENET1 PHY<br/>RGMII RX/TX pins]
 
-        RX0[de2_rgmii_rx<br/>Decode ENET0 RGMII RX]
-        RX1[de2_rgmii_rx<br/>Decode ENET1 RGMII RX]
+        subgraph PATH01["Forward path A: ENET0 RX to ENET1 TX"]
+            RX0[de2_rgmii_rx<br/>Decode ENET0 RGMII RX]
+            FIFO01[axis_async_fifo<br/>ENET0 RX clock to ENET1 TX clock]
+            TX1[eth_mac_1g_rgmii TX<br/>Transmit on ENET1<br/>Add preamble and FCS]
+            RX0 --> FIFO01 --> TX1
+        end
 
-        FIFO01[axis_async_fifo<br/>ENET0 RX clock -> ENET1 TX clock]
-        FIFO10[axis_async_fifo<br/>ENET1 RX clock -> ENET0 TX clock]
-
-        TX1[eth_mac_1g_rgmii TX<br/>Regenerate preamble and FCS]
-        TX0[eth_mac_1g_rgmii TX<br/>Regenerate preamble and FCS]
+        subgraph PATH10["Forward path B: ENET1 RX to ENET0 TX"]
+            RX1[de2_rgmii_rx<br/>Decode ENET1 RGMII RX]
+            FIFO10[axis_async_fifo<br/>ENET1 RX clock to ENET0 TX clock]
+            TX0[eth_mac_1g_rgmii TX<br/>Transmit on ENET0<br/>Add preamble and FCS]
+            RX1 --> FIFO10 --> TX0
+        end
 
         LEDS[LED debug outputs<br/>traffic, good frames, FCS errors, reset, heartbeat]
     end
 
     ROUTER <--> ENET0
-    ENET0 --> RX0 --> FIFO01 --> TX1 --> ENET1
-    ENET1 --> RX1 --> FIFO10 --> TX0 --> ENET0
+    ENET0 --> RX0
+    TX0 --> ENET0
+    TX1 --> ENET1
+    ENET1 --> RX1
     ENET1 <--> LAPTOP
 
     RX0 --> LEDS
@@ -66,23 +73,37 @@ flowchart TD
     PHYRESET --> ENET1RST[ENET1_RST_N]
 ```
 
-## Per-Direction Frame Flow
+## Bidirectional Frame Flow
 
-The bridge is symmetric. The same logic exists in both directions.
+The bridge is bidirectional because it contains two mirrored one-way hardware
+paths. Each path receives from one Ethernet PHY and transmits from the opposite
+PHY.
 
 ```mermaid
-flowchart TD
-    PHYRX[PHY RX pins<br/>RX_CLK, RX_DATA, RX_DV]
-    DDR[altddio_in<br/>Sample RGMII on both clock edges]
-    ALIGN[DE2 RGMII alignment candidates<br/>Try possible nibble/edge alignments]
-    GMII[axis_gmii_rx<br/>Find preamble/SFD, output AXI-Stream bytes]
-    FCS[Frame status<br/>tlast + tuser marks bad frame/FCS]
-    FIFO[axis_async_fifo<br/>Cross RX clock domain to opposite TX clock]
-    TXMAC[eth_mac_1g / axis_gmii_tx<br/>Add preamble, pad if needed, regenerate FCS]
-    DDRTX[altddio_out<br/>Drive RGMII TX DDR data]
-    PHYTX[Opposite PHY TX pins<br/>GTX_CLK, TX_DATA, TX_EN]
+flowchart LR
+    subgraph DIR01["Direction A: Router side to Laptop side"]
+        P0RX[ENET0 RX pins<br/>RX_CLK, RX_DATA, RX_DV]
+        D0[de2_rgmii_rx<br/>RGMII DDR sample and align]
+        G0[axis_gmii_rx<br/>Find preamble/SFD<br/>Check/remove FCS]
+        S0[AXI-Stream frame bytes<br/>tdata, tvalid, tlast, tuser]
+        F01[axis_async_fifo<br/>ENET0 RX clock to ENET1 TX clock]
+        T1[eth_mac_1g / axis_gmii_tx<br/>Add preamble, pad if needed,<br/>regenerate FCS]
+        P1TX[ENET1 TX pins<br/>GTX_CLK, TX_DATA, TX_EN]
 
-    PHYRX --> DDR --> ALIGN --> GMII --> FCS --> FIFO --> TXMAC --> DDRTX --> PHYTX
+        P0RX --> D0 --> G0 --> S0 --> F01 --> T1 --> P1TX
+    end
+
+    subgraph DIR10["Direction B: Laptop side to Router side"]
+        P1RX[ENET1 RX pins<br/>RX_CLK, RX_DATA, RX_DV]
+        D1[de2_rgmii_rx<br/>RGMII DDR sample and align]
+        G1[axis_gmii_rx<br/>Find preamble/SFD<br/>Check/remove FCS]
+        S1[AXI-Stream frame bytes<br/>tdata, tvalid, tlast, tuser]
+        F10[axis_async_fifo<br/>ENET1 RX clock to ENET0 TX clock]
+        T0[eth_mac_1g / axis_gmii_tx<br/>Add preamble, pad if needed,<br/>regenerate FCS]
+        P0TX[ENET0 TX pins<br/>GTX_CLK, TX_DATA, TX_EN]
+
+        P1RX --> D1 --> G1 --> S1 --> F10 --> T0 --> P0TX
+    end
 ```
 
 ## Runtime Packet Sequence
@@ -97,32 +118,40 @@ sequenceDiagram
     participant ENET0 as FPGA ENET0
     participant Router
 
-    Laptop->>ENET1: DHCP/ARP/Ethernet frame
-    ENET1->>Core: RGMII RX decoded to AXI-Stream
-    Core->>Core: FIFO crosses to ENET0 TX clock
-    Core->>ENET0: MAC regenerates FCS and transmits
-    ENET0->>Router: Frame forwarded to router
+    Laptop->>ENET1: Ethernet frame, e.g. DHCP/ARP/IP
+    ENET1->>Core: ENET1 RX decoded to AXI-Stream bytes
+    Core->>Core: FIFO10 crosses to ENET0 TX clock
+    Core->>ENET0: ENET0 TX MAC adds preamble/FCS
+    ENET0->>Router: Same frame contents forwarded
 
-    Router->>ENET0: DHCP reply / ARP / IP traffic
-    ENET0->>Core: RGMII RX decoded to AXI-Stream
-    Core->>Core: FIFO crosses to ENET1 TX clock
-    Core->>ENET1: MAC regenerates FCS and transmits
-    ENET1->>Laptop: Frame forwarded to laptop
+    Router->>ENET0: Ethernet frame, e.g. DHCP reply/ARP/IP
+    ENET0->>Core: ENET0 RX decoded to AXI-Stream bytes
+    Core->>Core: FIFO01 crosses to ENET1 TX clock
+    Core->>ENET1: ENET1 TX MAC adds preamble/FCS
+    ENET1->>Laptop: Same frame contents forwarded
 ```
 
 ## LED Debug Flow
 
 ```mermaid
 flowchart LR
-    RAW0[ENET0 RX_CTL activity] --> LEDG0[LEDG0]
-    RAW1[ENET1 RX_CTL activity] --> LEDG1[LEDG1]
-    TX01[Valid ENET0 -> ENET1 TX frame] --> LEDG2[LEDG2]
-    TX10[Valid ENET1 -> ENET0 TX frame] --> LEDG3[LEDG3]
-    BAD0[ENET0 bad frame/FCS] --> LEDG4[LEDG4]
-    BAD1[ENET1 bad frame/FCS] --> LEDG5[LEDG5]
-    GOOD[Any valid decoded frame] --> LEDG6[LEDG6]
-    READY[Bridge out of reset] --> LEDG7[LEDG7]
-    HEARTBEAT[125 MHz heartbeat divider] --> LEDG8[LEDG8]
+    subgraph RX_EVENTS["Receive-side events"]
+        RAW0[ENET0 RX_CTL activity] --> LEDG0[LEDG0]
+        RAW1[ENET1 RX_CTL activity] --> LEDG1[LEDG1]
+        BAD0[ENET0 bad frame/FCS] --> LEDG4[LEDG4]
+        BAD1[ENET1 bad frame/FCS] --> LEDG5[LEDG5]
+        GOOD[Any valid decoded frame<br/>from either direction] --> LEDG6[LEDG6]
+    end
+
+    subgraph TX_EVENTS["Transmit-side events"]
+        TX01[Valid frame transmitted<br/>ENET0 RX to ENET1 TX] --> LEDG2[LEDG2]
+        TX10[Valid frame transmitted<br/>ENET1 RX to ENET0 TX] --> LEDG3[LEDG3]
+    end
+
+    subgraph SYSTEM_EVENTS["System status"]
+        READY[Bridge out of reset] --> LEDG7[LEDG7]
+        HEARTBEAT[125 MHz FPGA heartbeat divider] --> LEDG8[LEDG8]
+    end
 ```
 
 ## File-To-Function Map
@@ -143,11 +172,12 @@ flowchart LR
 
 ## Short Explanation For Documentation
 
-The FPGA is configured as an inline Ethernet bridge. Each Ethernet PHY provides
-RGMII receive data to the FPGA. The receive logic samples both RGMII clock
-edges, aligns the nibbles into bytes, checks the Ethernet frame, and emits an
-AXI-Stream frame. An async FIFO transfers that frame into the opposite port's
-transmit clock domain. The transmit MAC then rebuilds the Ethernet transmit
-stream, including preamble and FCS, and drives the opposite RGMII PHY. The same
-path exists in reverse, so the router and laptop can exchange DHCP, ARP, DNS,
-ICMP, and normal IP traffic through the FPGA.
+The FPGA is configured as an inline transparent Ethernet bridge. It is
+bidirectional because `fpga_core.v` instantiates two mirrored forwarding paths:
+ENET0 RX goes through `fifo_0_to_1_inst` to ENET1 TX, and ENET1 RX goes through
+`fifo_1_to_0_inst` to ENET0 TX. In each direction, the receive logic samples
+RGMII data, aligns nibbles into bytes, checks/removes the incoming FCS, and
+emits AXI-Stream frame bytes. The async FIFO crosses into the opposite transmit
+clock domain. The transmit MAC adds preamble, pads if required, regenerates FCS,
+and drives the opposite RGMII PHY. The frame contents are forwarded as a byte
+stream; the active bridge does not parse or filter MAC/IP/TCP/UDP fields.
