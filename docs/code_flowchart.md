@@ -5,12 +5,12 @@ current working board build, not the older firewall modules that remain in the
 repository for reference.
 
 Important hardware note: the active Verilog instantiates two mirrored forwarding
-paths, but the latest board test did not behave as a fully bidirectional bridge.
-With the normal cabling, router traffic reached the laptop, but laptop traffic
-did not reach the router. The diagrams below therefore separate the intended
-code structure from the currently observed hardware behavior.
+paths for the intended transparent bridge. In the latest board test, router
+traffic reached the laptop, but laptop traffic did not reach the router. The
+top-level diagram below shows the intended bidirectional bridge; the later
+runtime packet sequence documents the currently observed hardware behavior.
 
-## Observed Hardware Flow
+## Top-Level Bidirectional System Flow
 
 ```mermaid
 flowchart LR
@@ -19,15 +19,14 @@ flowchart LR
 
     subgraph FPGA["DE2-115 FPGA board"]
         ENET0[ENET0 PHY<br/>router-side port]
-        ENET1[ENET1 PHY<br/>laptop-side port]
         CORE[fpga_core<br/>active bridge code]
+        ENET1[ENET1 PHY<br/>laptop-side port]
     end
 
-    ROUTER --> ENET0 --> CORE --> ENET1 --> LAPTOP
-    LAPTOP -. not working in latest test .-> ENET1
-    ENET1 -. intended reverse path in code .-> CORE
-    CORE -. not observed reaching router .-> ENET0
-    ENET0 -. blocked or failing direction .-> ROUTER
+    ROUTER <--> ENET0
+    ENET0 <--> CORE
+    CORE <--> ENET1
+    ENET1 <--> LAPTOP
 ```
 
 ## Implemented Code Structure
